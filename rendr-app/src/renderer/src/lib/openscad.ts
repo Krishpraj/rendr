@@ -3,25 +3,18 @@ let requestId = 0
 
 function getWorker(): Worker {
   if (!worker) {
-    worker = new Worker(new URL('../workers/openscad.worker.ts', import.meta.url), {
-      type: 'module'
-    })
+    worker = new Worker(
+      new URL('../workers/openscad.worker.ts', import.meta.url),
+      { type: 'module' }
+    )
   }
   return worker
 }
 
-export interface ScadOutput {
-  /** OFF text content (preferred — has colors) */
-  offText?: string
-  /** Binary STL fallback */
-  stlBuffer?: ArrayBuffer
-  format: 'off' | 'stl'
-}
-
-export function compileScad(
+export function scadToStl(
   code: string,
   onStatus?: (message: string) => void
-): Promise<ScadOutput> {
+): Promise<ArrayBuffer> {
   return new Promise((resolve, reject) => {
     const id = ++requestId
     const w = getWorker()
@@ -35,6 +28,7 @@ export function compileScad(
     }, timeoutMs)
 
     function handler(e: MessageEvent) {
+      // Log all worker messages for debugging
       if (e.data.type === 'log') {
         console.log('[OpenSCAD Worker]', e.data.message)
         return
@@ -49,11 +43,7 @@ export function compileScad(
 
       if (e.data.type === 'result') {
         cleanup()
-        if (e.data.format === 'off' && e.data.text) {
-          resolve({ offText: e.data.text, format: 'off' })
-        } else {
-          resolve({ stlBuffer: e.data.buffer, format: 'stl' })
-        }
+        resolve(e.data.buffer)
         return
       }
 
@@ -71,16 +61,5 @@ export function compileScad(
 
     w.addEventListener('message', handler)
     w.postMessage({ id, code })
-  })
-}
-
-/** Backwards-compatible: returns STL ArrayBuffer only */
-export function scadToStl(
-  code: string,
-  onStatus?: (message: string) => void
-): Promise<ArrayBuffer> {
-  return compileScad(code, onStatus).then((out) => {
-    if (out.stlBuffer) return out.stlBuffer
-    throw new Error('Expected STL output but got OFF')
   })
 }

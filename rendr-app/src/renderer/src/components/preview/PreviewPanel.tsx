@@ -3,12 +3,6 @@ import { useProject } from '@/contexts/ProjectContext'
 import { useRender } from '@/hooks/useRender'
 import { Loader2, Box, Image, Code2, Copy, Check, Rotate3D } from 'lucide-react'
 import { StlViewer } from './StlViewer'
-import type { CanvasState } from '@/types'
-
-// Canvas state not available with model-viewer — stub for now
-export function getCanvasState(): CanvasState | null {
-  return null
-}
 
 type ViewMode = 'preview' | '3d' | 'code'
 

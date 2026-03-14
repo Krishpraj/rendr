@@ -12,12 +12,7 @@ export default defineConfig({
   renderer: {
     resolve: {
       alias: {
-        '@': resolve('src/renderer/src'),
-        // Polyfill Node.js modules for @gltf-transform/core NodeIO (same as webpack fallback: false)
-        'fs': resolve('src/renderer/src/lib/empty-module.ts'),
-        'fs/promises': resolve('src/renderer/src/lib/empty-module.ts'),
-        'path': resolve('src/renderer/src/lib/empty-module.ts'),
-        'module': resolve('src/renderer/src/lib/empty-module.ts')
+        '@': resolve('src/renderer/src')
       }
     },
     plugins: [react()],

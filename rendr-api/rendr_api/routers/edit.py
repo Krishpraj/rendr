@@ -17,7 +17,6 @@ from rendr_api.services.prompts import (
     ANALYZE_AND_PLAN_PROMPT,
     REVIEW_CHECKLIST,
     STRICT_CODE_PROMPT,
-    format_canvas_context,
 )
 
 router = APIRouter()
@@ -49,7 +48,6 @@ async def edit(
         "original_code": req.code,
         "user_prompt": req.prompt,
         "part_labels": [pl.model_dump() for pl in req.part_labels],
-        "canvas_state": req.canvas_state.model_dump() if req.canvas_state else None,
         "analysis": "",
         "plan": "",
         "generated_code": "",
@@ -105,7 +103,6 @@ async def _stream_pipeline(initial_state: dict, settings: Settings):
     fast_provider = state.get("fast_provider", settings.fast_provider)
     fast_model = state.get("fast_model", settings.fast_model)
     conversation_history = state.get("conversation_history", [])
-    canvas_context = format_canvas_context(state.get("canvas_state"))
 
     def _model_for(is_generation: bool = False):
         if fast and not is_generation:
@@ -137,12 +134,12 @@ async def _stream_pipeline(initial_state: dict, settings: Settings):
                 messages.append(msg)
             messages.append({
                 "role": "user",
-                "content": f"Now analyze and plan for this new request:\n\nUser request: {state['user_prompt']}{code_ctx}{part_context}{canvas_context}",
+                "content": f"Now analyze and plan for this new request:\n\nUser request: {state['user_prompt']}{code_ctx}{part_context}",
             })
         else:
             messages = [
                 {"role": "system", "content": ANALYZE_AND_PLAN_PROMPT},
-                {"role": "user", "content": f"Analyze this OpenSCAD project and produce a modification plan.\n\nUser request: {state['user_prompt']}{code_ctx}{part_context}{canvas_context}"},
+                {"role": "user", "content": f"Analyze this OpenSCAD project and produce a modification plan.\n\nUser request: {state['user_prompt']}{code_ctx}{part_context}"},
             ]
 
         ap_provider, ap_model = _model_for()
@@ -191,7 +188,7 @@ async def _stream_pipeline(initial_state: dict, settings: Settings):
                 gen_messages.append(msg)
         gen_messages.append({
             "role": "user",
-            "content": f"Generate OpenSCAD code for: {state['user_prompt']}\n\nPlan:\n{state['plan']}{existing}{feedback}{canvas_context}",
+            "content": f"Generate OpenSCAD code for: {state['user_prompt']}\n\nPlan:\n{state['plan']}{existing}{feedback}",
         })
 
         gen_provider, gen_model = _model_for(is_generation=True)

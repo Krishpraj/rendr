@@ -1,23 +1,14 @@
-"""OpenSCAD CLI validation and PNG rendering.
-
-Uses subprocess.run via asyncio.to_thread for Windows compatibility
-(asyncio.create_subprocess_exec raises NotImplementedError on Windows).
-"""
+"""OpenSCAD CLI validation and PNG rendering."""
 
 import asyncio
 import base64
-import os
 import re
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
 
 from rendr_api.config import Settings
 from rendr_api.models.responses import ValidationResult
-
-# On Windows, use NUL instead of /dev/null
-_DEV_NULL = "NUL" if os.name == "nt" else "/dev/null"
 
 
 def is_openscad_available(settings: Settings) -> bool:
@@ -52,20 +43,10 @@ def parse_error_with_context(error_line: str, code: str) -> str:
     return error_line
 
 
-def _run_openscad_sync(cmd: list[str], timeout: int = 30) -> subprocess.CompletedProcess:
-    """Run OpenSCAD synchronously (called from thread)."""
-    return subprocess.run(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        timeout=timeout,
-    )
-
-
 async def validate_code(code: str, settings: Settings) -> ValidationResult:
     """Validate OpenSCAD code by running a syntax check.
 
-    Runs: openscad -o NUL --export-format echo file.scad
+    Runs: openscad -o /dev/null --export-format echo file.scad
     """
     if not is_openscad_available(settings):
         return ValidationResult(
@@ -78,14 +59,16 @@ async def validate_code(code: str, settings: Settings) -> ValidationResult:
         scad_path = f.name
 
     try:
-        cmd = [
+        proc = await asyncio.create_subprocess_exec(
             settings.openscad_path,
-            "-o", _DEV_NULL,
+            "-o", "/dev/null",
             "--export-format", "echo",
             scad_path,
-        ]
-        proc = await asyncio.to_thread(_run_openscad_sync, cmd, 30)
-        stderr_text = proc.stderr.decode("utf-8", errors="replace")
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+        stderr_text = stderr.decode("utf-8", errors="replace")
 
         errors = []
         warnings = []
@@ -103,7 +86,7 @@ async def validate_code(code: str, settings: Settings) -> ValidationResult:
             errors=errors,
             warnings=warnings,
         )
-    except subprocess.TimeoutExpired:
+    except asyncio.TimeoutError:
         return ValidationResult(valid=False, errors=["OpenSCAD validation timed out"])
     finally:
         Path(scad_path).unlink(missing_ok=True)
@@ -129,7 +112,12 @@ async def render_png(
             cmd.append(f"--camera={camera}")
         cmd.append(scad_path)
 
-        proc = await asyncio.to_thread(_run_openscad_sync, cmd, 60)
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        await asyncio.wait_for(proc.communicate(), timeout=60)
 
         if proc.returncode != 0 or not Path(png_path).exists():
             raise RuntimeError("OpenSCAD render failed")
@@ -155,7 +143,12 @@ async def render_stl(code: str, settings: Settings) -> bytes:
             scad_path,
         ]
 
-        proc = await asyncio.to_thread(_run_openscad_sync, cmd, 60)
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        await asyncio.wait_for(proc.communicate(), timeout=60)
 
         if proc.returncode != 0 or not Path(stl_path).exists():
             raise RuntimeError("OpenSCAD STL export failed")

@@ -1,5 +1,6 @@
 // @ts-nocheck
-// OpenSCAD WASM worker — exports OFF format (preserves colors) with STL fallback.
+// OpenSCAD WASM worker - based on CADAM's approach
+// https://github.com/Adam-CAD/CADAM
 
 import OpenSCAD from '../vendor/openscad-wasm/openscad.js'
 import wasmUrl from '../vendor/openscad-wasm/openscad.wasm?url'
@@ -16,61 +17,23 @@ async function createInstance() {
   })
 }
 
-function tryReadFile(inst, path) {
-  try {
-    return inst.FS.readFile(path)
-  } catch (e) {
-    return null
-  }
-}
-
 self.onmessage = async (e) => {
   const { id, code } = e.data
 
   try {
     self.postMessage({ id, type: 'status', message: 'Initializing OpenSCAD WASM...' })
     const inst = await createInstance()
+    self.postMessage({ type: 'log', message: 'WASM instance created OK' })
 
     self.postMessage({ id, type: 'status', message: 'Compiling model...' })
-    inst.FS.writeFile('/input.scad', code)
 
-    // Try OFF first (has colors)
+    inst.FS.writeFile('/input.scad', code)
+    self.postMessage({ type: 'log', message: 'Input file written, calling callMain...' })
+
+    // callMain can throw a number (Emscripten exit code) on success
     let exitCode = -1
     try {
       exitCode = inst.callMain([
-        '/input.scad',
-        '-o', '/output.off',
-        '--export-format=off',
-        '--enable=manifold',
-        '--enable=fast-csg',
-        '--enable=lazy-union'
-      ])
-    } catch (exitErr) {
-      if (typeof exitErr === 'number') exitCode = exitErr
-      else if (exitErr && typeof exitErr === 'object' && 'status' in exitErr) exitCode = exitErr.status
-      else throw exitErr
-    }
-
-    self.postMessage({ type: 'log', message: 'OFF export exit code: ' + exitCode })
-
-    // Read OFF output as binary, then decode
-    let offBytes = tryReadFile(inst, '/output.off')
-    if (offBytes && offBytes.length > 0) {
-      const offText = new TextDecoder().decode(offBytes)
-      self.postMessage({ type: 'log', message: 'OFF output OK, length: ' + offText.length })
-      self.postMessage({ id, type: 'result', text: offText, format: 'off' })
-      return
-    }
-
-    self.postMessage({ type: 'log', message: 'OFF output empty/missing, trying STL fallback...' })
-
-    // Fallback to STL
-    const inst2 = await createInstance()
-    inst2.FS.writeFile('/input.scad', code)
-
-    let stlExitCode = -1
-    try {
-      stlExitCode = inst2.callMain([
         '/input.scad',
         '-o', '/output.stl',
         '--export-format=binstl',
@@ -78,21 +41,37 @@ self.onmessage = async (e) => {
         '--enable=fast-csg',
         '--enable=lazy-union'
       ])
+      self.postMessage({ type: 'log', message: 'callMain returned: ' + exitCode })
     } catch (exitErr) {
-      if (typeof exitErr === 'number') stlExitCode = exitErr
-      else if (exitErr && typeof exitErr === 'object' && 'status' in exitErr) stlExitCode = exitErr.status
-      else throw exitErr
+      self.postMessage({ type: 'log', message: 'callMain threw: ' + typeof exitErr + ' = ' + JSON.stringify(exitErr) })
+      if (typeof exitErr === 'number') {
+        exitCode = exitErr
+      } else if (exitErr && typeof exitErr === 'object' && 'status' in exitErr) {
+        exitCode = exitErr.status
+      } else {
+        throw exitErr
+      }
     }
 
-    let stlBytes = tryReadFile(inst2, '/output.stl')
-    if (stlBytes && stlBytes.length > 0) {
-      const copy = new Uint8Array(stlBytes).buffer
-      self.postMessage({ type: 'log', message: 'STL fallback OK, size: ' + copy.byteLength })
-      self.postMessage({ id, type: 'result', buffer: copy, format: 'stl' }, [copy])
-      return
+    self.postMessage({ type: 'log', message: 'Exit code: ' + exitCode + ', reading output...' })
+
+    // Try to read output
+    let output
+    try {
+      output = inst.FS.readFile('/output.stl', { encoding: 'binary' })
+      self.postMessage({ type: 'log', message: 'Output read OK, size: ' + output.length + ' bytes' })
+    } catch (readErr) {
+      self.postMessage({ type: 'log', message: 'Failed to read output: ' + readErr })
     }
 
-    throw new Error('OpenSCAD produced no output (OFF exit: ' + exitCode + ', STL exit: ' + stlExitCode + ')')
+    if (!output || output.length === 0) {
+      throw new Error('OpenSCAD produced no output (exit code ' + exitCode + ')')
+    }
+
+    // Copy into a fresh ArrayBuffer (Emscripten's buffer may not be transferable)
+    const copy = new Uint8Array(output).buffer
+    self.postMessage({ type: 'log', message: 'Sending ' + copy.byteLength + ' bytes to main thread...' })
+    self.postMessage({ id, type: 'result', buffer: copy }, [copy])
   } catch (err) {
     self.postMessage({ type: 'log', message: 'WORKER ERROR: ' + (err?.message || String(err)) })
     self.postMessage({ id, type: 'error', message: err?.message || String(err) })

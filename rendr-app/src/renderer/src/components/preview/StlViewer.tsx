@@ -142,9 +142,6 @@ export function StlViewer({ code }: StlViewerProps) {
         const geo = loader.parse(buffer)
         geo.center()
 
-        // Cache globally
-        cache.code = thisCode
-        cache.geometry = geo
 
         // Store buffer for download
         stlBufferRef.current = buffer
@@ -223,7 +220,6 @@ export function StlViewer({ code }: StlViewerProps) {
           canvas.addEventListener('webglcontextrestored', () => gl.resetState())
         }}
       >
-        <color attach="background" args={['#1e1e1e']} />
 
         {isOrthographic ? (
           <OrthographicCamera

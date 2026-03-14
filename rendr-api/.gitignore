@@ -1,0 +1,5 @@
+.venv/
+.env
+rendr_api.egg-info/
+__pycache__/
+.pytest_cache/

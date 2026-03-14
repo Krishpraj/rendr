@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useProject } from '@/contexts/ProjectContext'
 import { useRender } from '@/hooks/useRender'
-import { Loader2, Box, Image, Code2, Copy, Check, Rotate3D } from 'lucide-react'
+import { Loader2, Box, Image, Code2, Rotate3D } from 'lucide-react'
 import { StlViewer } from './StlViewer'
+import { CodeEditor } from './CodeEditor'
 
 type ViewMode = 'preview' | '3d' | 'code'
 
@@ -10,7 +11,6 @@ export function PreviewPanel() {
   const { currentProject, updateProjectCode } = useProject()
   const render = useRender()
   const [viewMode, setViewMode] = useState<ViewMode>('3d')
-  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     if (currentProject?.code && !currentProject.previewImage) {
@@ -25,12 +25,14 @@ export function PreviewPanel() {
     }
   }, [currentProject?.code])
 
-  const copyCode = async () => {
-    if (!currentProject?.code) return
-    await navigator.clipboard.writeText(currentProject.code)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
+  // Called by the code editor on every debounced change — saves to DB and refreshes 3D
+  const handleCodeChange = useCallback(
+    (newCode: string) => {
+      if (!currentProject) return
+      updateProjectCode(newCode, currentProject.parameters)
+    },
+    [currentProject, updateProjectCode]
+  )
 
   if (!currentProject) {
     return (
@@ -80,18 +82,7 @@ export function PreviewPanel() {
       {/* Content */}
       <div className="flex-1 overflow-hidden">
         {viewMode === 'code' ? (
-          <div className="relative h-full">
-            <button
-              onClick={copyCode}
-              className="absolute right-3 top-3 z-10 rounded border border-vsc-border bg-vsc-sidebar p-1.5 text-vsc-text-dim hover:text-vsc-text transition-colors"
-              title="Copy code"
-            >
-              {copied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
-            </button>
-            <pre className="h-full overflow-auto p-4 text-[13px] leading-relaxed text-vsc-text font-mono">
-              <code>{currentProject.code}</code>
-            </pre>
-          </div>
+          <CodeEditor code={currentProject.code} onChange={handleCodeChange} />
         ) : viewMode === '3d' ? (
           <StlViewer code={currentProject.code} />
         ) : render.isPending ? (

@@ -3,7 +3,7 @@ import { ProjectProvider } from '@/contexts/ProjectContext'
 import { ChatProvider } from '@/contexts/ChatContext'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Toaster } from 'sonner'
-import { MainLayout } from '@/components/layout/MainLayout'
+import { AppShell } from '@/components/layout/AppShell'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -24,13 +24,15 @@ export default function App() {
               position="bottom-right"
               toastOptions={{
                 style: {
-                  background: '#252526',
-                  border: '1px solid #3c3c3c',
-                  color: '#e5e5e5'
+                  background: '#18181b',
+                  border: '1px solid #3f3f46',
+                  color: '#fafafa',
+                  fontFamily: '"JetBrains Mono", monospace',
+                  fontSize: '12px'
                 }
               }}
             />
-            <MainLayout />
+            <AppShell />
           </TooltipProvider>
         </ChatProvider>
       </ProjectProvider>

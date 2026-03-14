@@ -1,6 +1,8 @@
 {
   "compilerOptions": {
     "composite": true,
+    "target": "ESNext",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
     "module": "ESNext",
     "moduleResolution": "bundler",
@@ -16,5 +18,5 @@
     "strict": true,
     "skipLibCheck": true
   },
-  "include": ["src/renderer/src/**/*", "src/renderer/*.d.ts"]
+  "include": ["src/renderer/src/**/*", "src/renderer/*.d.ts", "src/preload/*.d.ts"]
 }

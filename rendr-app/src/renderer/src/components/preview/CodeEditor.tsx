@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from 'react'
+import { useRef, useEffect, useCallback, useState } from 'react'
 import { EditorState } from '@codemirror/state'
 import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightSpecialChars, drawSelection, highlightActiveLine, rectangularSelection, crosshairCursor } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
@@ -8,7 +8,6 @@ import { searchKeymap, highlightSelectionMatches } from '@codemirror/search'
 import { cpp } from '@codemirror/lang-cpp'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { Copy, Check } from 'lucide-react'
-import { useState } from 'react'
 
 interface CodeEditorProps {
   code: string
@@ -22,7 +21,6 @@ export function CodeEditor({ code, onChange }: CodeEditorProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [copied, setCopied] = useState(false)
 
-  // Keep callback ref in sync
   onChangeRef.current = onChange
 
   const copyCode = useCallback(async () => {
@@ -38,7 +36,6 @@ export function CodeEditor({ code, onChange }: CodeEditorProps) {
     const updateListener = EditorView.updateListener.of((update) => {
       if (update.docChanged) {
         const newCode = update.state.doc.toString()
-        // Debounce: save after 800ms of inactivity
         if (debounceRef.current) clearTimeout(debounceRef.current)
         debounceRef.current = setTimeout(() => {
           onChangeRef.current(newCode)
@@ -77,18 +74,24 @@ export function CodeEditor({ code, onChange }: CodeEditorProps) {
         EditorView.theme({
           '&': {
             height: '100%',
-            fontSize: '13px'
+            fontSize: '12px'
           },
           '.cm-scroller': {
             overflow: 'auto',
-            fontFamily: "'Cascadia Code', 'Fira Code', 'JetBrains Mono', Consolas, monospace"
+            fontFamily: '"JetBrains Mono", "Cascadia Code", "Fira Code", Consolas, monospace'
           },
           '.cm-content': {
             padding: '8px 0'
           },
           '.cm-gutters': {
-            backgroundColor: '#1e1e1e',
-            borderRight: '1px solid #2d2d2d'
+            backgroundColor: '#18181b',
+            borderRight: '1px solid #27272a'
+          },
+          '.cm-activeLineGutter': {
+            backgroundColor: '#27272a'
+          },
+          '.cm-activeLine': {
+            backgroundColor: 'rgba(99, 102, 241, 0.04)'
           }
         })
       ]
@@ -105,9 +108,8 @@ export function CodeEditor({ code, onChange }: CodeEditorProps) {
       if (debounceRef.current) clearTimeout(debounceRef.current)
       view.destroy()
     }
-  }, []) // Only create editor once
+  }, [])
 
-  // Sync external code changes (e.g. from AI generation) into the editor
   useEffect(() => {
     const view = viewRef.current
     if (!view) return
@@ -120,13 +122,13 @@ export function CodeEditor({ code, onChange }: CodeEditorProps) {
   }, [code])
 
   return (
-    <div className="relative h-full">
+    <div className="relative h-full bg-r-surface">
       <button
         onClick={copyCode}
-        className="absolute right-3 top-3 z-10 rounded border border-vsc-border bg-vsc-sidebar p-1.5 text-vsc-text-dim hover:text-vsc-text transition-colors"
+        className="absolute right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-md border border-r-border bg-r-elevated text-r-text-muted transition-colors hover:text-r-text"
         title="Copy code"
       >
-        {copied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
+        {copied ? <Check className="h-3.5 w-3.5 text-r-success" /> : <Copy className="h-3.5 w-3.5" />}
       </button>
       <div ref={editorRef} className="h-full overflow-hidden" />
     </div>

@@ -38,41 +38,28 @@ module.exports = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))'
         },
-        // VS Code exact colors
-        vsc: {
-          bg: '#1e1e1e',
-          'bg-dark': '#181818',
-          'bg-darker': '#111111',
-          sidebar: '#181818',
-          'sidebar-bg': '#181818',
-          activitybar: '#181818',
-          'activitybar-active': '#d7d7d7',
-          'activitybar-inactive': '#7f7f7f',
-          editor: '#1e1e1e',
-          titlebar: '#181818',
-          statusbar: '#007acc',
-          'statusbar-text': '#ffffff',
-          'statusbar-hover': '#1f8ad2',
-          tab: '#1e1e1e',
-          'tab-inactive': '#2d2d2d',
-          'tab-border': '#252526',
-          border: '#2b2b2b',
-          'border-light': '#3c3c3c',
-          'input-bg': '#313131',
-          'input-border': '#3c3c3c',
-          selection: '#264f78',
-          highlight: '#0078d4',
-          'list-hover': '#2a2d2e',
-          'list-active': '#37373d',
-          'list-focus': '#04395e',
-          text: '#cccccc',
-          'text-dim': '#969696',
-          'text-dimmer': '#6e7681',
-          'text-bright': '#e8e8e8',
-          green: '#3fb950',
-          red: '#f85149',
-          blue: '#007acc',
-          orange: '#cca700'
+        // rendr design system — monochrome
+        r: {
+          bg: '#0a0a0a',
+          surface: '#141414',
+          elevated: '#1e1e1e',
+          overlay: '#282828',
+          border: '#2a2a2a',
+          'border-light': '#3a3a3a',
+          'input-bg': '#111111',
+          'input-border': '#2a2a2a',
+          'input-focus': '#ffffff',
+          text: '#f5f5f5',
+          'text-secondary': '#999999',
+          'text-muted': '#666666',
+          'text-dim': '#444444',
+          accent: '#ffffff',
+          'accent-hover': '#e0e0e0',
+          'accent-muted': '#cccccc',
+          success: '#22c55e',
+          warning: '#f59e0b',
+          error: '#ef4444',
+          'error-muted': '#dc2626'
         }
       },
       borderRadius: {
@@ -82,11 +69,33 @@ module.exports = {
       },
       fontSize: {
         '2xs': '10px',
-        'vsc': '13px'
+        'xs': '12px',
+        'sm': '13px',
+        'base': '14px'
       },
       fontFamily: {
-        sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'sans-serif'],
-        mono: ['Consolas', 'Menlo', 'Monaco', 'Courier New', 'monospace']
+        mono: ['"JetBrains Mono"', '"Space Mono"', '"Cascadia Code"', '"Fira Code"', 'Consolas', 'monospace'],
+        sans: ['"Inter"', '"SF Pro Display"', '-apple-system', 'BlinkMacSystemFont', 'sans-serif']
+      },
+      animation: {
+        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'fade-in': 'fadeIn 0.5s ease-out',
+        'slide-up': 'slideUp 0.4s ease-out',
+        'slide-in-right': 'slideInRight 0.3s ease-out'
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' }
+        },
+        slideUp: {
+          '0%': { opacity: '0', transform: 'translateY(10px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' }
+        },
+        slideInRight: {
+          '0%': { opacity: '0', transform: 'translateX(10px)' },
+          '100%': { opacity: '1', transform: 'translateX(0)' }
+        }
       }
     }
   },

@@ -11,12 +11,11 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
-import { Send, Loader2, ChevronDown, Zap, Sparkles } from 'lucide-react'
+import { ArrowUp, Loader2, ChevronDown, Zap, Sparkles } from 'lucide-react'
 import type { PipelineStage } from '@/types'
 
 const STAGES: { key: PipelineStage; label: string }[] = [
-  { key: 'analyze', label: 'Analyze' },
-  { key: 'plan', label: 'Plan' },
+  { key: 'analyze_and_plan', label: 'Analyze' },
   { key: 'generate', label: 'Generate' },
   { key: 'validate', label: 'Validate' },
   { key: 'review', label: 'Review' },
@@ -24,9 +23,9 @@ const STAGES: { key: PipelineStage; label: string }[] = [
 ]
 
 const MODELS = [
-  { id: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4', short: 'Sonnet 4' },
-  { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5', short: 'Haiku 4.5' },
-  { id: 'claude-opus-4-20250514', label: 'Claude Opus 4', short: 'Opus 4' }
+  { id: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4', short: 'Sonnet' },
+  { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5', short: 'Haiku' },
+  { id: 'claude-opus-4-20250514', label: 'Claude Opus 4', short: 'Opus' }
 ]
 
 type Mode = 'normal' | 'fast'
@@ -41,26 +40,26 @@ function PipelineProgress({
   if (!currentStage && (!completedStages || completedStages.length === 0)) return null
 
   return (
-    <div className="flex items-center gap-1.5 py-1">
+    <div className="flex items-center gap-2 py-1.5">
       {STAGES.map(({ key, label }) => {
         const isDone =
           completedStages?.includes(key) ||
           (key === 'complete' && !currentStage && completedStages && completedStages.length > 0)
         const isActive = currentStage === key
         return (
-          <div key={key} className="flex items-center gap-0.5">
+          <div key={key} className="flex items-center gap-1">
             <div
-              className={`h-1.5 w-1.5 rounded-full ${
+              className={`h-1.5 w-1.5 rounded-full transition-colors ${
                 isDone
-                  ? 'bg-vsc-green'
+                  ? 'bg-r-success'
                   : isActive
-                    ? 'bg-vsc-blue animate-pulse-dot'
-                    : 'bg-vsc-text-dimmer/30'
+                    ? 'bg-r-accent animate-pulse-dot'
+                    : 'bg-r-text-dim/30'
               }`}
             />
             <span
-              className={`text-2xs ${
-                isDone ? 'text-vsc-green' : isActive ? 'text-vsc-blue' : 'text-vsc-text-dimmer/50'
+              className={`text-2xs transition-colors ${
+                isDone ? 'text-r-success' : isActive ? 'text-r-accent' : 'text-r-text-dim/50'
               }`}
             >
               {label}
@@ -74,18 +73,32 @@ function PipelineProgress({
 
 export function ChatPanel() {
   const { messages, isStreaming, currentStage } = useChat()
-  const { currentProject } = useProject()
+  const { currentProject, initialPrompt, setInitialPrompt } = useProject()
   const { sendPrompt } = useEditStream()
   const health = useBackendHealth()
   const [input, setInput] = useState('')
   const [mode, setMode] = useState<Mode>('normal')
-  const [selectedModel, setSelectedModel] = useState<string | null>(null) // null = auto (use server default)
+  const [selectedModel, setSelectedModel] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const initialPromptSent = useRef(false)
 
-  // Resolve which model label to show
+  // Auto-send initial prompt from welcome screen
+  useEffect(() => {
+    if (initialPrompt && currentProject && !initialPromptSent.current && !isStreaming) {
+      initialPromptSent.current = true
+      const text = initialPrompt
+      setInitialPrompt(null)
+      sendPrompt(text, {
+        model: selectedModel || undefined,
+        skipValidation: mode === 'fast',
+        skipRefinement: mode === 'fast'
+      })
+    }
+  }, [initialPrompt, currentProject, isStreaming, sendPrompt, setInitialPrompt, selectedModel, mode])
+
   const activeModelId = selectedModel || health.data?.model || MODELS[0].id
   const activeModelEntry = MODELS.find((m) => m.id === activeModelId) ||
-    MODELS.find((m) => activeModelId.includes(m.id.split('-')[1])) // fuzzy match
+    MODELS.find((m) => activeModelId.includes(m.id.split('-')[1]))
   const activeModelLabel = activeModelEntry?.short || activeModelId
 
   useEffect(() => {
@@ -116,23 +129,25 @@ export function ChatPanel() {
     <div className="flex h-full flex-col">
       {/* Messages */}
       <ScrollArea className="flex-1">
-        <div ref={scrollRef} className="flex flex-col gap-2 p-3">
+        <div ref={scrollRef} className="flex flex-col gap-1 p-3">
           {messages.length === 0 && (
-            <div className="py-8 text-center text-[13px] text-vsc-text-dimmer">
-              {currentProject ? 'Describe what you want to create' : 'Select a project first'}
+            <div className="py-12 text-center">
+              <p className="text-xs text-r-text-dim">
+                describe what you want to create
+              </p>
             </div>
           )}
           {messages.map((msg) => (
             <div
               key={msg.id}
-              className={`rounded px-3 py-2 text-[13px] leading-relaxed ${
+              className={`rounded-lg px-3 py-2 text-xs leading-relaxed ${
                 msg.role === 'user'
-                  ? 'bg-vsc-list-active text-vsc-text-bright'
-                  : 'text-vsc-text'
+                  ? 'ml-8 bg-r-accent/10 text-r-text'
+                  : 'mr-4 text-r-text-secondary'
               }`}
             >
-              <div className="mb-0.5 text-2xs font-medium text-vsc-text-dim">
-                {msg.role === 'user' ? 'You' : 'rendr'}
+              <div className="mb-1 text-2xs font-medium text-r-text-dim">
+                {msg.role === 'user' ? 'you' : 'rendr'}
               </div>
               <p className="whitespace-pre-wrap">{msg.content}</p>
               {msg.role === 'assistant' && msg.pipelineStages && (
@@ -145,60 +160,59 @@ export function ChatPanel() {
       </ScrollArea>
 
       {/* Input area */}
-      <div className="border-t border-vsc-border p-2">
-        <div className="rounded border border-vsc-input-border bg-vsc-input-bg">
-          {/* Textarea + send */}
+      <div className="border-t border-r-border/30 p-3">
+        <div className="overflow-hidden rounded-xl border border-r-border bg-r-input-bg transition-all focus-within:border-r-accent/40">
           <div className="flex items-end gap-1">
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={currentProject ? 'Describe your 3D model...' : 'Select a project first'}
+              placeholder="describe your model..."
               disabled={!currentProject || isStreaming}
               rows={1}
-              className="max-h-24 min-h-[32px] flex-1 resize-none bg-transparent px-2 py-1.5 text-[13px] text-vsc-text placeholder:text-vsc-text-dimmer focus:outline-none disabled:opacity-40"
+              className="max-h-28 min-h-[36px] flex-1 resize-none bg-transparent px-3 py-2.5 text-xs text-r-text placeholder:text-r-text-dim focus:outline-none disabled:opacity-40"
             />
             <button
               onClick={handleSend}
               disabled={!input.trim() || isStreaming || !currentProject}
-              className="mb-1 mr-1 flex h-6 w-6 items-center justify-center rounded text-vsc-text-dim transition-colors hover:text-vsc-text-bright disabled:opacity-30"
+              className="mb-1.5 mr-1.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-r-accent text-r-bg transition-all hover:bg-r-accent-hover disabled:opacity-20"
             >
               {isStreaming ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
-                <Send className="h-3.5 w-3.5" />
+                <ArrowUp className="h-3.5 w-3.5" />
               )}
             </button>
           </div>
 
-          {/* Mode + Model selectors - below input, inside the box */}
-          <div className="flex items-center gap-1 border-t border-vsc-border/50 px-1 py-1">
+          {/* Controls row */}
+          <div className="flex items-center gap-1 border-t border-r-border/30 px-2 py-1">
             {/* Mode selector */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex h-[22px] items-center gap-1 rounded-sm px-1.5 text-[11px] text-vsc-text-dim transition-colors hover:bg-vsc-list-hover hover:text-vsc-text">
+                <button className="flex h-6 items-center gap-1 rounded-md px-2 text-2xs text-r-text-dim transition-colors hover:bg-r-elevated hover:text-r-text-muted">
                   {mode === 'fast' ? (
-                    <Zap className="h-3 w-3 text-vsc-orange" />
+                    <Zap className="h-3 w-3 text-r-warning" />
                   ) : (
-                    <Sparkles className="h-3 w-3 text-vsc-blue" />
+                    <Sparkles className="h-3 w-3 text-r-accent" />
                   )}
-                  {mode === 'fast' ? 'Fast' : 'Normal'}
-                  <ChevronDown className="h-2.5 w-2.5 opacity-60" />
+                  {mode === 'fast' ? 'fast' : 'normal'}
+                  <ChevronDown className="h-2.5 w-2.5 opacity-50" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" side="top" className="mb-1 min-w-[160px]">
                 <DropdownMenuItem onClick={() => setMode('normal')} className="gap-2">
-                  <Sparkles className="h-3.5 w-3.5 text-vsc-blue" />
+                  <Sparkles className="h-3.5 w-3.5 text-r-accent" />
                   <div>
-                    <div className="text-[12px]">Normal</div>
-                    <div className="text-2xs text-vsc-text-dimmer">Full pipeline with validation</div>
+                    <div className="text-xs">normal</div>
+                    <div className="text-2xs text-r-text-dim">full pipeline</div>
                   </div>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setMode('fast')} className="gap-2">
-                  <Zap className="h-3.5 w-3.5 text-vsc-orange" />
+                  <Zap className="h-3.5 w-3.5 text-r-warning" />
                   <div>
-                    <div className="text-[12px]">Fast</div>
-                    <div className="text-2xs text-vsc-text-dimmer">Skip validation & refinement</div>
+                    <div className="text-xs">fast</div>
+                    <div className="text-2xs text-r-text-dim">skip validation</div>
                   </div>
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -209,19 +223,16 @@ export function ChatPanel() {
             {/* Model selector */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex h-[22px] items-center gap-1 rounded-sm px-1.5 text-[11px] text-vsc-text-dim transition-colors hover:bg-vsc-list-hover hover:text-vsc-text">
-                  {selectedModel === null ? 'Auto' : activeModelLabel}
-                  <ChevronDown className="h-2.5 w-2.5 opacity-60" />
+                <button className="flex h-6 items-center gap-1 rounded-md px-2 text-2xs text-r-text-dim transition-colors hover:bg-r-elevated hover:text-r-text-muted">
+                  {selectedModel === null ? 'auto' : activeModelLabel.toLowerCase()}
+                  <ChevronDown className="h-2.5 w-2.5 opacity-50" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" side="top" className="mb-1 min-w-[200px]">
-                <DropdownMenuItem
-                  onClick={() => setSelectedModel(null)}
-                  className="gap-2"
-                >
+              <DropdownMenuContent align="end" side="top" className="mb-1 min-w-[180px]">
+                <DropdownMenuItem onClick={() => setSelectedModel(null)}>
                   <div>
-                    <div className="text-[12px]">Auto</div>
-                    <div className="text-2xs text-vsc-text-dimmer">Use server default ({health.data?.model || 'claude-sonnet'})</div>
+                    <div className="text-xs">auto</div>
+                    <div className="text-2xs text-r-text-dim">server default</div>
                   </div>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
@@ -229,11 +240,10 @@ export function ChatPanel() {
                   <DropdownMenuItem
                     key={m.id}
                     onClick={() => setSelectedModel(m.id)}
-                    className="gap-2"
                   >
                     <div>
-                      <div className="text-[12px]">{m.label}</div>
-                      <div className="font-mono text-2xs text-vsc-text-dimmer">{m.id}</div>
+                      <div className="text-xs">{m.label.toLowerCase()}</div>
+                      <div className="font-mono text-2xs text-r-text-dim">{m.id}</div>
                     </div>
                   </DropdownMenuItem>
                 ))}

@@ -14,6 +14,8 @@ interface ProjectContextValue {
   duplicateProject: (id: string) => Project
   updateProjectCode: (code: string, parameters?: Parameter[], previewImage?: string | null) => void
   loading: boolean
+  initialPrompt: string | null
+  setInitialPrompt: (prompt: string | null) => void
 }
 
 const ProjectContext = createContext<ProjectContextValue | null>(null)
@@ -22,6 +24,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([])
   const [currentProject, setCurrentProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
+  const [initialPrompt, setInitialPrompt] = useState<string | null>(null)
 
   // Load projects from backend on mount
   useEffect(() => {
@@ -143,7 +146,9 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         renameProject,
         duplicateProject,
         updateProjectCode,
-        loading
+        loading,
+        initialPrompt,
+        setInitialPrompt
       }}
     >
       {children}

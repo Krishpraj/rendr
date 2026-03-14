@@ -11,16 +11,16 @@ import {
 } from '@react-three/drei'
 import * as THREE from 'three'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
-import { Loader2, AlertCircle, Download, RotateCcw } from 'lucide-react'
+import { AlertCircle, Download, Eye, Grid3X3, ChevronDown, ChevronUp } from 'lucide-react'
 import { scadToStl } from '@/lib/openscad'
 import { cn } from '@/lib/utils'
-import { ViewerControls } from './ViewerControls'
+import { analyzeMesh, formatNumber, formatSize, type MeshAnalytics } from '@/lib/meshAnalytics'
+import { useMeshAnalytics } from '@/contexts/MeshAnalyticsContext'
 
 interface StlViewerProps {
   code: string
 }
 
-// Default material values
 const DEFAULT_BRIGHTNESS = 50
 const DEFAULT_ROUGHNESS = 60
 const DEFAULT_METALNESS = 15
@@ -49,7 +49,6 @@ function StlModel({
     const actualRoughness = roughness / 100
     const actualMetalness = metalness / 100
 
-    // Parse the base color and apply brightness
     const baseColor = new THREE.Color(color)
     const r = Math.min(1, Math.max(0, baseColor.r * actualBrightness))
     const g = Math.min(1, Math.max(0, baseColor.g * actualBrightness))
@@ -76,22 +75,101 @@ function StlModel({
   )
 }
 
-// Polygon count helper
-function calculatePolygonCount(geometry: THREE.BufferGeometry): number {
-  if (geometry.index) {
-    return Math.floor(geometry.index.count / 3)
-  }
-  if (geometry.attributes.position) {
-    return Math.floor(geometry.attributes.position.count / 3)
-  }
-  return 0
-}
-
-// Global cache so geometry survives tab switches / remounts
 const cache: { code: string; geometry: THREE.BufferGeometry } | null = {
   code: '',
-  geometry: null as any
+  geometry: null as unknown as THREE.BufferGeometry
 }
+
+// ── Mesh Info Overlay ──
+
+function MeshInfoPanel({ analytics }: { analytics: MeshAnalytics }) {
+  const [expanded, setExpanded] = useState(true)
+  const bb = analytics.boundingBox
+
+  return (
+    <div className="absolute left-3 bottom-16 w-52 overflow-hidden rounded-lg border border-r-border/50 bg-r-surface/90 shadow-lg backdrop-blur-sm">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex w-full items-center justify-between px-3 py-1.5"
+      >
+        <span className="text-2xs font-medium uppercase tracking-widest text-r-text-dim">mesh analysis</span>
+        {expanded ? <ChevronDown className="h-3 w-3 text-r-text-dim" /> : <ChevronUp className="h-3 w-3 text-r-text-dim" />}
+      </button>
+      {expanded && (
+        <div className="space-y-2 border-t border-r-border/30 px-3 py-2">
+          {/* Geometry */}
+          <div>
+            <div className="mb-1 text-2xs text-r-text-dim">geometry</div>
+            <div className="grid grid-cols-3 gap-x-2 gap-y-0.5">
+              <InfoCell label="verts" value={formatNumber(analytics.vertices)} />
+              <InfoCell label="tris" value={formatNumber(analytics.triangles)} />
+              <InfoCell label="edges" value={formatNumber(analytics.edges)} />
+            </div>
+          </div>
+
+          {/* Dimensions */}
+          <div>
+            <div className="mb-1 text-2xs text-r-text-dim">bounding box</div>
+            <div className="grid grid-cols-3 gap-x-2 gap-y-0.5">
+              <InfoCell label="w" value={formatSize(bb.width)} />
+              <InfoCell label="h" value={formatSize(bb.height)} />
+              <InfoCell label="d" value={formatSize(bb.depth)} />
+            </div>
+          </div>
+
+          {/* Physical */}
+          <div>
+            <div className="mb-1 text-2xs text-r-text-dim">physical</div>
+            <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+              <InfoCell label="area" value={`${formatNumber(analytics.surfaceArea)} mm²`} />
+              <InfoCell label="vol" value={`${formatNumber(analytics.volume)} mm³`} />
+            </div>
+          </div>
+
+          {/* Topology */}
+          <div>
+            <div className="mb-1 text-2xs text-r-text-dim">topology</div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <div className={cn(
+                  'h-1.5 w-1.5 rounded-full',
+                  analytics.isWatertight ? 'bg-r-success' : 'bg-r-warning'
+                )} />
+                <span className="text-2xs text-r-text-secondary">
+                  {analytics.isWatertight ? 'watertight' : 'open mesh'}
+                </span>
+              </div>
+              {analytics.genus > 0 && (
+                <span className="text-2xs text-r-text-muted">
+                  genus {analytics.genus}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Center of mass */}
+          <div>
+            <div className="mb-1 text-2xs text-r-text-dim">center of mass</div>
+            <div className="font-mono text-2xs text-r-text-muted">
+              ({analytics.centerOfMass.x}, {analytics.centerOfMass.y}, {analytics.centerOfMass.z})
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function InfoCell({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <span className="text-2xs text-r-text-dim">{label} </span>
+      <span className="font-mono text-2xs text-r-text-secondary">{value}</span>
+    </div>
+  )
+}
+
+// ── Main Viewer ──
 
 export function StlViewer({ code }: StlViewerProps) {
   const [geometry, setGeometry] = useState<THREE.BufferGeometry | null>(
@@ -102,16 +180,15 @@ export function StlViewer({ code }: StlViewerProps) {
   const [error, setError] = useState<string | null>(null)
   const renderingRef = useRef('')
 
-  // Viewer state
   const [isOrthographic, setIsOrthographic] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('solid')
   const [brightness, setBrightness] = useState(DEFAULT_BRIGHTNESS)
   const [roughness, setRoughness] = useState(DEFAULT_ROUGHNESS)
   const [metalness, setMetalness] = useState(DEFAULT_METALNESS)
-  const [modelColor] = useState('#4a9eff')
-  const [polygonCount, setPolygonCount] = useState<number | undefined>(undefined)
+  const [modelColor] = useState('#818cf8')
+  const [meshAnalytics, setMeshAnalytics] = useState<MeshAnalytics | null>(null)
+  const meshCtx = useMeshAnalytics()
 
-  // STL binary data for download
   const stlBufferRef = useRef<ArrayBuffer | null>(null)
 
   useEffect(() => {
@@ -119,7 +196,9 @@ export function StlViewer({ code }: StlViewerProps) {
 
     if (cache?.code === code && cache.geometry) {
       setGeometry(cache.geometry)
-      setPolygonCount(calculatePolygonCount(cache.geometry))
+      const a = analyzeMesh(cache.geometry)
+      setMeshAnalytics(a)
+      meshCtx.setAnalytics(a)
       return
     }
 
@@ -130,7 +209,7 @@ export function StlViewer({ code }: StlViewerProps) {
     setLoadingMessage('Initializing OpenSCAD...')
     setError(null)
     setGeometry(null)
-    setPolygonCount(undefined)
+    setMeshAnalytics(null)
 
     const thisCode = code
 
@@ -142,13 +221,14 @@ export function StlViewer({ code }: StlViewerProps) {
         const geo = loader.parse(buffer)
         geo.center()
 
-
-        // Store buffer for download
         stlBufferRef.current = buffer
 
         if (renderingRef.current === thisCode) {
+          const a = analyzeMesh(geo)
           setGeometry(geo)
-          setPolygonCount(calculatePolygonCount(geo))
+          setMeshAnalytics(a)
+          meshCtx.setAnalytics(a)
+          meshCtx.setStlSize(buffer.byteLength)
           setLoading(false)
         }
       })
@@ -172,37 +252,30 @@ export function StlViewer({ code }: StlViewerProps) {
     URL.revokeObjectURL(url)
   }, [])
 
-  const handleReset = useCallback(() => {
-    setBrightness(DEFAULT_BRIGHTNESS)
-    setRoughness(DEFAULT_ROUGHNESS)
-    setMetalness(DEFAULT_METALNESS)
-    setViewMode('solid')
-  }, [])
-
   if (loading) {
     return (
-      <div className="flex h-full flex-col items-center justify-center">
-        <Loader2 className="mb-2 h-6 w-6 animate-spin text-vsc-blue" />
-        <p className="text-[13px] text-vsc-text-dim">{loadingMessage}</p>
-        <p className="mt-1 text-[11px] text-vsc-text-dimmer">First load may take a moment</p>
+      <div className="flex h-full flex-col items-center justify-center bg-r-bg">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-r-border border-t-r-accent" />
+        <p className="mt-3 text-xs text-r-text-muted">{loadingMessage}</p>
+        <p className="mt-1 text-2xs text-r-text-dim">first load may take a moment</p>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2">
-        <AlertCircle className="h-8 w-8 text-red-400" />
-        <p className="text-[13px] text-vsc-text-dim">3D viewer error</p>
-        <p className="max-w-xs text-center text-[11px] text-vsc-text-dimmer">{error}</p>
+      <div className="flex h-full flex-col items-center justify-center gap-3 bg-r-bg">
+        <AlertCircle className="h-6 w-6 text-r-error" />
+        <p className="text-xs text-r-text-muted">compilation error</p>
+        <p className="max-w-sm text-center text-2xs text-r-text-dim">{error}</p>
       </div>
     )
   }
 
   if (!geometry) {
     return (
-      <div className="flex h-full flex-col items-center justify-center">
-        <p className="text-[13px] text-vsc-text-dim">No model to display</p>
+      <div className="flex h-full flex-col items-center justify-center bg-r-bg">
+        <p className="text-xs text-r-text-dim">no model to display</p>
       </div>
     )
   }
@@ -213,14 +286,13 @@ export function StlViewer({ code }: StlViewerProps) {
     <div className="relative h-full w-full">
       <Canvas
         gl={{ antialias: true, powerPreference: 'default', toneMapping: THREE.NoToneMapping }}
-        style={{ background: '#1e1e1e' }}
+        style={{ background: '#0a0a0a' }}
         onCreated={({ gl }) => {
           const canvas = gl.domElement
           canvas.addEventListener('webglcontextlost', (e) => e.preventDefault())
           canvas.addEventListener('webglcontextrestored', () => gl.resetState())
         }}
       >
-
         {isOrthographic ? (
           <OrthographicCamera
             makeDefault
@@ -238,6 +310,8 @@ export function StlViewer({ code }: StlViewerProps) {
             far={10000}
           />
         )}
+
+        {/* <gridHelper args={[200, 40, '#1a1a1a', '#141414']} rotation={[0, 0, 0]} /> */}
 
         <Stage environment={null} intensity={0.6}>
           <ambientLight intensity={0.8} />
@@ -261,89 +335,76 @@ export function StlViewer({ code }: StlViewerProps) {
         </GizmoHelper>
       </Canvas>
 
-      {/* Viewer controls panel - top right */}
-      <ViewerControls
-        brightness={brightness}
-        roughness={roughness}
-        metalness={metalness}
-        polygonCount={polygonCount}
-        onBrightnessChange={setBrightness}
-        onRoughnessChange={setRoughness}
-        onMetalnessChange={setMetalness}
-        onReset={handleReset}
-        defaultBrightness={DEFAULT_BRIGHTNESS}
-        defaultRoughness={DEFAULT_ROUGHNESS}
-        defaultMetalness={DEFAULT_METALNESS}
-      />
+      {/* Mesh analytics panel - bottom left */}
+      {meshAnalytics && <MeshInfoPanel analytics={meshAnalytics} />}
 
-      {/* Bottom controls bar */}
+      {/* Bottom center controls */}
       <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2">
-        {/* View mode toggle */}
-        <div className="flex items-center gap-1 rounded-md border border-vsc-border bg-vsc-sidebar/95 px-2 py-1.5 shadow-lg backdrop-blur-sm">
+        <div className="flex items-center gap-0.5 rounded-lg border border-r-border/50 bg-r-surface/90 p-1 backdrop-blur-sm">
           <button
             onClick={() => setViewMode('solid')}
             className={cn(
-              'rounded px-2.5 py-1 text-[11px] font-medium transition-colors',
+              'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-2xs font-medium transition-all',
               viewMode === 'solid'
-                ? 'bg-vsc-blue text-white'
-                : 'text-vsc-text-dim hover:text-vsc-text'
+                ? 'bg-r-accent text-r-bg'
+                : 'text-r-text-muted hover:text-r-text-secondary'
             )}
           >
-            Solid
+            <Eye className="h-3 w-3" />
+            solid
           </button>
           <button
             onClick={() => setViewMode('wireframe')}
             className={cn(
-              'rounded px-2.5 py-1 text-[11px] font-medium transition-colors',
+              'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-2xs font-medium transition-all',
               viewMode === 'wireframe'
-                ? 'bg-vsc-blue text-white'
-                : 'text-vsc-text-dim hover:text-vsc-text'
+                ? 'bg-r-accent text-r-bg'
+                : 'text-r-text-muted hover:text-r-text-secondary'
             )}
           >
-            Wireframe
+            <Grid3X3 className="h-3 w-3" />
+            wire
           </button>
         </div>
 
-        {/* Camera toggle */}
-        <div className="flex items-center gap-1 rounded-md border border-vsc-border bg-vsc-sidebar/95 px-2 py-1.5 shadow-lg backdrop-blur-sm">
+        <div className="flex items-center gap-0.5 rounded-lg border border-r-border/50 bg-r-surface/90 p-1 backdrop-blur-sm">
           <button
             onClick={() => setIsOrthographic(false)}
             className={cn(
-              'rounded px-2.5 py-1 text-[11px] font-medium transition-colors',
+              'rounded-md px-2.5 py-1 text-2xs font-medium transition-all',
               !isOrthographic
-                ? 'bg-vsc-blue text-white'
-                : 'text-vsc-text-dim hover:text-vsc-text'
+                ? 'bg-r-accent text-r-bg'
+                : 'text-r-text-muted hover:text-r-text-secondary'
             )}
-            title="Perspective camera"
           >
-            Persp
+            persp
           </button>
           <button
             onClick={() => setIsOrthographic(true)}
             className={cn(
-              'rounded px-2.5 py-1 text-[11px] font-medium transition-colors',
+              'rounded-md px-2.5 py-1 text-2xs font-medium transition-all',
               isOrthographic
-                ? 'bg-vsc-blue text-white'
-                : 'text-vsc-text-dim hover:text-vsc-text'
+                ? 'bg-r-accent text-r-bg'
+                : 'text-r-text-muted hover:text-r-text-secondary'
             )}
-            title="Orthographic camera"
           >
-            Ortho
+            ortho
           </button>
         </div>
       </div>
 
-      {/* Download button - bottom right */}
-      {stlBufferRef.current && (
-        <button
-          onClick={handleDownloadStl}
-          className="absolute bottom-4 right-4 flex items-center gap-1.5 rounded-md border border-vsc-border bg-vsc-sidebar/95 px-3 py-1.5 text-[11px] font-medium text-vsc-text-dim shadow-lg backdrop-blur-sm transition-colors hover:text-vsc-text"
-          title="Download STL"
-        >
-          <Download className="h-3.5 w-3.5" />
-          Download STL
-        </button>
-      )}
+      {/* Top right download */}
+      <div className="absolute right-3 top-3 flex items-center gap-2">
+        {stlBufferRef.current && (
+          <button
+            onClick={handleDownloadStl}
+            className="flex items-center gap-1.5 rounded-md border border-r-border/50 bg-r-surface/90 px-2.5 py-1 text-2xs text-r-text-muted backdrop-blur-sm transition-colors hover:text-r-text"
+          >
+            <Download className="h-3 w-3" />
+            .stl
+          </button>
+        )}
+      </div>
     </div>
   )
 }

@@ -3,3 +3,6 @@
 rendr_api.egg-info/
 __pycache__/
 .pytest_cache/
+rendr.db
+rendr.db-wal
+rendr.db-shm

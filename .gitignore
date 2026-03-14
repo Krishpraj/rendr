@@ -28,3 +28,6 @@ Thumbs.db
 # External repos
 synaps-cad/
 CADAM/
+rendr-api/rendr.db-wal
+rendr-api/rendr.db-shm
+rendr-api/rendr.db

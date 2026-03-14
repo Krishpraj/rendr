@@ -11,7 +11,7 @@ import {
 } from '@react-three/drei'
 import * as THREE from 'three'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
-import { AlertCircle, Download, Eye, Grid3X3, ChevronDown, ChevronUp } from 'lucide-react'
+import { AlertCircle, Download, Eye, Grid3X3, ChevronDown, ChevronUp, Paintbrush, Sun, Droplets, CircleDot, Layers } from 'lucide-react'
 import { scadToStl } from '@/lib/openscad'
 import { cn } from '@/lib/utils'
 import { analyzeMesh, formatNumber, formatSize, type MeshAnalytics } from '@/lib/meshAnalytics'
@@ -33,7 +33,8 @@ function StlModel({
   roughness,
   metalness,
   wireframe,
-  color
+  color,
+  flatShading
 }: {
   geometry: THREE.BufferGeometry
   brightness: number
@@ -41,6 +42,7 @@ function StlModel({
   metalness: number
   wireframe: boolean
   color: string
+  flatShading: boolean
 }) {
   const meshRef = useRef<THREE.Mesh>(null)
 
@@ -58,20 +60,145 @@ function StlModel({
       color: new THREE.Color(r, g, b),
       metalness: actualMetalness,
       roughness: actualRoughness,
-      flatShading: false,
+      flatShading,
       wireframe,
       envMapIntensity: 0.3
     })
-  }, [brightness, roughness, metalness, wireframe, color])
+  }, [brightness, roughness, metalness, wireframe, color, flatShading])
 
   useEffect(() => {
-    geometry.computeVertexNormals()
-  }, [geometry])
+    if (!flatShading) geometry.computeVertexNormals()
+  }, [geometry, flatShading])
 
   return (
     <Center>
       <mesh ref={meshRef} geometry={geometry} material={material} rotation={[-Math.PI / 2, 0, 0]} />
     </Center>
+  )
+}
+
+// ── Material Controls Panel ──
+
+const COLOR_PRESETS = [
+  { name: 'silver', value: '#c0c0c0' },
+  { name: 'white', value: '#f5f5f5' },
+  { name: 'gold', value: '#d4a84b' },
+  { name: 'copper', value: '#b87333' },
+  { name: 'steel', value: '#71797e' },
+  { name: 'black', value: '#2a2a2a' },
+  { name: 'red', value: '#dc2626' },
+  { name: 'blue', value: '#3b82f6' },
+  { name: 'green', value: '#22c55e' }
+]
+
+function MaterialSlider({
+  label,
+  icon: Icon,
+  value,
+  onChange,
+  min = 0,
+  max = 100
+}: {
+  label: string
+  icon: typeof Sun
+  value: number
+  onChange: (v: number) => void
+  min?: number
+  max?: number
+}) {
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <Icon className="h-3 w-3 text-r-text-dim" />
+          <span className="text-2xs text-r-text-muted">{label}</span>
+        </div>
+        <span className="font-mono text-2xs text-r-text-dim">{value}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(e) => onChange(parseInt(e.target.value))}
+        className="h-1 w-full cursor-pointer appearance-none rounded-full bg-r-elevated [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-r-text"
+      />
+    </div>
+  )
+}
+
+function MaterialPanel({
+  brightness,
+  roughness,
+  metalness,
+  flatShading,
+  color,
+  onBrightnessChange,
+  onRoughnessChange,
+  onMetalnessChange,
+  onFlatShadingChange,
+  onColorChange
+}: {
+  brightness: number
+  roughness: number
+  metalness: number
+  flatShading: boolean
+  color: string
+  onBrightnessChange: (v: number) => void
+  onRoughnessChange: (v: number) => void
+  onMetalnessChange: (v: number) => void
+  onFlatShadingChange: (v: boolean) => void
+  onColorChange: (v: string) => void
+}) {
+  return (
+    <div className="w-52 space-y-3 rounded-lg border border-r-border/50 bg-r-surface/95 p-3 shadow-lg backdrop-blur-sm">
+      <div className="text-2xs font-medium uppercase tracking-widest text-r-text-dim">material</div>
+
+      <MaterialSlider label="brightness" icon={Sun} value={brightness} onChange={onBrightnessChange} />
+      <MaterialSlider label="roughness" icon={Droplets} value={roughness} onChange={onRoughnessChange} />
+      <MaterialSlider label="metalness" icon={CircleDot} value={metalness} onChange={onMetalnessChange} />
+
+      {/* Flat shading toggle */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <Layers className="h-3 w-3 text-r-text-dim" />
+          <span className="text-2xs text-r-text-muted">flat shading</span>
+        </div>
+        <button
+          onClick={() => onFlatShadingChange(!flatShading)}
+          className={cn(
+            'h-4 w-7 rounded-full transition-colors',
+            flatShading ? 'bg-r-accent' : 'bg-r-elevated'
+          )}
+        >
+          <div className={cn(
+            'h-3 w-3 rounded-full bg-r-bg transition-transform',
+            flatShading ? 'translate-x-3.5' : 'translate-x-0.5'
+          )} />
+        </button>
+      </div>
+
+      {/* Color presets */}
+      <div>
+        <div className="mb-1.5 text-2xs text-r-text-dim">color</div>
+        <div className="flex flex-wrap gap-1.5">
+          {COLOR_PRESETS.map((preset) => (
+            <button
+              key={preset.name}
+              onClick={() => onColorChange(preset.value)}
+              title={preset.name}
+              className={cn(
+                'h-5 w-5 rounded-full border transition-all',
+                color === preset.value
+                  ? 'border-r-text scale-110'
+                  : 'border-r-border/50 hover:border-r-text-dim'
+              )}
+              style={{ backgroundColor: preset.value }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -185,7 +312,9 @@ export function StlViewer({ code }: StlViewerProps) {
   const [brightness, setBrightness] = useState(DEFAULT_BRIGHTNESS)
   const [roughness, setRoughness] = useState(DEFAULT_ROUGHNESS)
   const [metalness, setMetalness] = useState(DEFAULT_METALNESS)
-  const [modelColor] = useState('#818cf8')
+  const [modelColor, setModelColor] = useState('#c0c0c0')
+  const [flatShading, setFlatShading] = useState(false)
+  const [showMaterialPanel, setShowMaterialPanel] = useState(false)
   const [meshAnalytics, setMeshAnalytics] = useState<MeshAnalytics | null>(null)
   const meshCtx = useMeshAnalytics()
 
@@ -328,6 +457,7 @@ export function StlViewer({ code }: StlViewerProps) {
             metalness={metalness}
             wireframe={isWireframe}
             color={modelColor}
+            flatShading={flatShading}
           />
         </Stage>
 
@@ -339,6 +469,24 @@ export function StlViewer({ code }: StlViewerProps) {
 
       {/* Mesh analytics panel - bottom left */}
       {meshAnalytics && <MeshInfoPanel analytics={meshAnalytics} />}
+
+      {/* Material panel - anchored above the material button */}
+      {showMaterialPanel && (
+        <div className="absolute bottom-14 left-1/2 z-20 -translate-x-1/2">
+          <MaterialPanel
+            brightness={brightness}
+            roughness={roughness}
+            metalness={metalness}
+            flatShading={flatShading}
+            color={modelColor}
+            onBrightnessChange={setBrightness}
+            onRoughnessChange={setRoughness}
+            onMetalnessChange={setMetalness}
+            onFlatShadingChange={setFlatShading}
+            onColorChange={setModelColor}
+          />
+        </div>
+      )}
 
       {/* Bottom center controls */}
       <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2">
@@ -393,6 +541,21 @@ export function StlViewer({ code }: StlViewerProps) {
             ortho
           </button>
         </div>
+
+        <button
+          onClick={() => setShowMaterialPanel(!showMaterialPanel)}
+          className={cn(
+            'flex items-center gap-1.5 rounded-lg border border-r-border/50 p-1 backdrop-blur-sm transition-all',
+            showMaterialPanel
+              ? 'bg-r-accent text-r-bg'
+              : 'bg-r-surface/90 text-r-text-muted hover:text-r-text-secondary'
+          )}
+        >
+          <div className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-2xs font-medium">
+            <Paintbrush className="h-3 w-3" />
+            material
+          </div>
+        </button>
       </div>
 
       {/* Top right download */}

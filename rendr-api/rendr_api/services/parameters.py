@@ -88,19 +88,18 @@ def parse_parameters(code: str) -> list[Parameter]:
                             except ValueError:
                                 pass
                         options.append(ParameterOption(value=opt_value, label=opt_label))
-                elif re.match(r"(\d+:?)+", cleaned):
-                    # Range: min:max or min:step:max
-                    range_parts = cleaned.strip().split(":")
-                    if len(range_parts) == 2:
-                        param_range = ParameterRange(
-                            min=float(range_parts[0]), max=float(range_parts[1])
-                        )
-                    elif len(range_parts) == 3:
-                        param_range = ParameterRange(
-                            min=float(range_parts[0]),
-                            step=float(range_parts[1]),
-                            max=float(range_parts[2]),
-                        )
+                elif (range_match := re.match(r"(-?\d+(?:\.\d+)?):(-?\d+(?:\.\d+)?):(-?\d+(?:\.\d+)?)", cleaned)):
+                    # Range: min:step:max
+                    param_range = ParameterRange(
+                        min=float(range_match.group(1)),
+                        step=float(range_match.group(2)),
+                        max=float(range_match.group(3)),
+                    )
+                elif (range_match := re.match(r"(-?\d+(?:\.\d+)?):(-?\d+(?:\.\d+)?)", cleaned)):
+                    # Range: min:max
+                    param_range = ParameterRange(
+                        min=float(range_match.group(1)), max=float(range_match.group(2))
+                    )
 
             # Check for description comment above the parameter
             before = header.split(match.group(0))[0]

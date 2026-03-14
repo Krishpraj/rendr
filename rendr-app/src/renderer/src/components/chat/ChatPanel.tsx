@@ -23,9 +23,10 @@ const STAGES: { key: PipelineStage; label: string }[] = [
 ]
 
 const MODELS = [
-  { id: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4', short: 'Sonnet' },
-  { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5', short: 'Haiku' },
-  { id: 'claude-opus-4-20250514', label: 'Claude Opus 4', short: 'Opus' }
+  { id: 'claude-sonnet-4-20250514', provider: 'anthropic', label: 'Claude Sonnet 4', short: 'Sonnet' },
+  { id: 'claude-haiku-4-5-20251001', provider: 'anthropic', label: 'Claude Haiku 4.5', short: 'Haiku' },
+  { id: 'claude-opus-4-20250514', provider: 'anthropic', label: 'Claude Opus 4', short: 'Opus' },
+  { id: 'openai/gpt-oss-120b', provider: 'openai', label: 'GPT-OSS 120B', short: 'GPT-OSS' }
 ]
 
 type Mode = 'normal' | 'fast'
@@ -88,8 +89,10 @@ export function ChatPanel() {
       initialPromptSent.current = true
       const text = initialPrompt
       setInitialPrompt(null)
+      const entry = MODELS.find((m) => m.id === selectedModel)
       sendPrompt(text, {
         model: selectedModel || undefined,
+        provider: entry?.provider,
         skipValidation: mode === 'fast',
         skipRefinement: mode === 'fast'
       })
@@ -111,8 +114,10 @@ export function ChatPanel() {
     const text = input.trim()
     if (!text || isStreaming || !currentProject) return
     setInput('')
+    const entry = MODELS.find((m) => m.id === selectedModel)
     sendPrompt(text, {
       model: selectedModel || undefined,
+      provider: entry?.provider,
       skipValidation: mode === 'fast',
       skipRefinement: mode === 'fast'
     })

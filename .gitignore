@@ -31,3 +31,4 @@ CADAM/
 rendr-api/rendr.db-wal
 rendr-api/rendr.db-shm
 rendr-api/rendr.db
+rendr-api/.railtracks/

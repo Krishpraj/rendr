@@ -74,8 +74,8 @@ module.exports = {
         'base': '14px'
       },
       fontFamily: {
-        mono: ['"JetBrains Mono"', '"Space Mono"', '"Cascadia Code"', '"Fira Code"', 'Consolas', 'monospace'],
-        sans: ['"Inter"', '"SF Pro Display"', '-apple-system', 'BlinkMacSystemFont', 'sans-serif']
+        mono: ['"Geist Mono"', '"SF Mono"', '"Fira Code"', 'Consolas', 'monospace'],
+        sans: ['"Geist"', '"Geist Sans"', '-apple-system', 'BlinkMacSystemFont', 'sans-serif']
       },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',

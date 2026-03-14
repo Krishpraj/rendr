@@ -1,4 +1,7 @@
-"""LangGraph pipeline: analyze_and_plan → generate → validate → review (with loop)."""
+"""LangGraph + Railtracks pipeline: analyze_and_plan → generate → validate → review (with loop).
+
+The review step uses a Railtracks agent with tool-based code checks.
+"""
 
 import json
 import re
@@ -17,6 +20,7 @@ from rendr_api.services.prompts import (
     REVIEW_CHECKLIST,
     STRICT_CODE_PROMPT,
 )
+from rendr_api.services.review_agent import build_review_agent
 
 
 def _pick_model(state: PipelineState, settings: Settings, *, is_generation: bool = False):
@@ -176,15 +180,28 @@ def build_pipeline(settings: Settings) -> StateGraph:
                 "title": title,
             }
 
-        messages = [
-            {"role": "system", "content": AGENT_PROMPT},
-            {
-                "role": "user",
-                "content": f"{REVIEW_CHECKLIST}\n\nUser request: {state['user_prompt']}\n\nGenerated code:\n```openscad\n{state['generated_code']}\n```\n\nValidation result: {state.get('validation', {})}",
-            },
-        ]
+        # Use Railtracks review agent with tool-based checks
         provider, model = _pick_model(state, settings)
-        feedback = await chat_completion(messages, settings, provider=provider, model=model)
+        try:
+            review_flow = build_review_agent(provider, model, settings)
+            review_input = (
+                f"{REVIEW_CHECKLIST}\n\n"
+                f"User request: {state['user_prompt']}\n\n"
+                f"Generated code:\n```openscad\n{state['generated_code']}\n```\n\n"
+                f"Validation result: {state.get('validation', {})}"
+            )
+            result = await review_flow.ainvoke(review_input)
+            feedback = str(result)
+        except Exception:
+            # Fallback to direct LLM call if railtracks agent fails
+            messages = [
+                {"role": "system", "content": AGENT_PROMPT},
+                {
+                    "role": "user",
+                    "content": f"{REVIEW_CHECKLIST}\n\nUser request: {state['user_prompt']}\n\nGenerated code:\n```openscad\n{state['generated_code']}\n```\n\nValidation result: {state.get('validation', {})}",
+                },
+            ]
+            feedback = await chat_completion(messages, settings, provider=provider, model=model)
 
         result: dict = {"review_feedback": feedback}
         title = _parse_title_from_review(feedback, state["user_prompt"])

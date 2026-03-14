@@ -10,6 +10,7 @@ dependencies = [
     "langgraph>=0.4",
     "langchain-core>=0.3",
     "litellm>=1.60",
+    "railtracks",
     "httpx>=0.28",
     "aiosqlite>=0.20",
 ]

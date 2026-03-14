@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useProject } from '@/contexts/ProjectContext'
 import { useChat } from '@/contexts/ChatContext'
 import { ArrowRight, Plus, Trash2, Clock, Box, Pen } from 'lucide-react'
+import { CubeLogo } from '@/components/icons/CubeLogo'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -128,7 +129,7 @@ export function WelcomeScreen() {
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
         <div className="flex items-center gap-2">
-          <Box className="h-4 w-4 text-r-text" />
+          <CubeLogo className="h-5 w-5 text-r-text" />
           <span className="text-xs font-medium text-r-text-muted">rendr</span>
         </div>
         <div style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>

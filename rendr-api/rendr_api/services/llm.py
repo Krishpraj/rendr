@@ -13,7 +13,7 @@ async def chat_completion(
     provider: str | None = None,
     model: str | None = None,
     temperature: float | None = None,
-    max_tokens: int = 4096,
+    max_tokens: int = 8192,
 ) -> str:
     """Call LLM via litellm and return the text response."""
     provider = provider or settings.llm_provider
@@ -38,6 +38,9 @@ async def chat_completion(
             kwargs["api_key"] = settings.openai_api_key
         if settings.openai_api_base:
             kwargs["api_base"] = settings.openai_api_base
+            # litellm strips the openai/ prefix before sending to the API,
+            # so re-wrap the full model name so the endpoint receives it as-is
+            kwargs["model"] = f"openai/{model}"
     elif provider == "ollama":
         kwargs["api_base"] = settings.ollama_host
 

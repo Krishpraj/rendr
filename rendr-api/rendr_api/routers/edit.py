@@ -18,6 +18,7 @@ from rendr_api.services.prompts import (
     REVIEW_CHECKLIST,
     STRICT_CODE_PROMPT,
 )
+from rendr_api.services.review_agent import build_review_agent
 
 router = APIRouter()
 
@@ -218,11 +219,25 @@ async def _stream_pipeline(initial_state: dict, settings: Settings):
 
         yield await emit("review", "running", round=round_num)
         rev_provider, rev_model = _model_for()
-        review_messages = [
-            {"role": "system", "content": AGENT_PROMPT},
-            {"role": "user", "content": f"{REVIEW_CHECKLIST}\n\nUser request: {state['user_prompt']}\n\nGenerated code:\n```openscad\n{state['generated_code']}\n```\n\nValidation: {state.get('validation', {})}"},
-        ]
-        review_text = await chat_completion(review_messages, settings, provider=rev_provider, model=rev_model)
+
+        # Use Railtracks review agent with tool-based checks
+        try:
+            review_flow = build_review_agent(rev_provider, rev_model, settings)
+            review_input = (
+                f"{REVIEW_CHECKLIST}\n\n"
+                f"User request: {state['user_prompt']}\n\n"
+                f"Generated code:\n```openscad\n{state['generated_code']}\n```\n\n"
+                f"Validation: {state.get('validation', {})}"
+            )
+            result = await review_flow.ainvoke(review_input)
+            review_text = str(result)
+        except Exception:
+            # Fallback to direct LLM call
+            review_messages = [
+                {"role": "system", "content": AGENT_PROMPT},
+                {"role": "user", "content": f"{REVIEW_CHECKLIST}\n\nUser request: {state['user_prompt']}\n\nGenerated code:\n```openscad\n{state['generated_code']}\n```\n\nValidation: {state.get('validation', {})}"},
+            ]
+            review_text = await chat_completion(review_messages, settings, provider=rev_provider, model=rev_model)
         state["review_feedback"] = review_text
 
         # Parse title from review response

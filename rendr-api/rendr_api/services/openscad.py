@@ -4,6 +4,7 @@ import asyncio
 import base64
 import re
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -54,21 +55,20 @@ async def validate_code(code: str, settings: Settings) -> ValidationResult:
             warnings=["OpenSCAD not installed — validation skipped"],
         )
 
-    with tempfile.NamedTemporaryFile(suffix=".scad", mode="w", delete=False) as f:
+    with tempfile.NamedTemporaryFile(suffix=".scad", mode="w", encoding="utf-8", delete=False) as f:
         f.write(code)
         scad_path = f.name
 
     try:
-        proc = await asyncio.create_subprocess_exec(
-            settings.openscad_path,
-            "-o", "/dev/null",
-            "--export-format", "echo",
-            scad_path,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
-        stderr_text = stderr.decode("utf-8", errors="replace")
+        def _run():
+            return subprocess.run(
+                [settings.openscad_path, "-o", "NUL", "--export-format", "echo", scad_path],
+                capture_output=True,
+                timeout=30,
+            )
+
+        proc = await asyncio.to_thread(_run)
+        stderr_text = proc.stderr.decode("utf-8", errors="replace")
 
         errors = []
         warnings = []
@@ -86,7 +86,7 @@ async def validate_code(code: str, settings: Settings) -> ValidationResult:
             errors=errors,
             warnings=warnings,
         )
-    except asyncio.TimeoutError:
+    except subprocess.TimeoutExpired:
         return ValidationResult(valid=False, errors=["OpenSCAD validation timed out"])
     finally:
         Path(scad_path).unlink(missing_ok=True)
@@ -96,7 +96,7 @@ async def render_png(
     code: str, settings: Settings, width: int = 512, height: int = 512, camera: str | None = None
 ) -> bytes:
     """Render OpenSCAD code to PNG and return the image bytes."""
-    with tempfile.NamedTemporaryFile(suffix=".scad", mode="w", delete=False) as f:
+    with tempfile.NamedTemporaryFile(suffix=".scad", mode="w", encoding="utf-8", delete=False) as f:
         f.write(code)
         scad_path = f.name
 
@@ -112,12 +112,10 @@ async def render_png(
             cmd.append(f"--camera={camera}")
         cmd.append(scad_path)
 
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        await asyncio.wait_for(proc.communicate(), timeout=60)
+        def _run():
+            return subprocess.run(cmd, capture_output=True, timeout=60)
+
+        proc = await asyncio.to_thread(_run)
 
         if proc.returncode != 0 or not Path(png_path).exists():
             raise RuntimeError("OpenSCAD render failed")
@@ -130,7 +128,7 @@ async def render_png(
 
 async def render_stl(code: str, settings: Settings) -> bytes:
     """Render OpenSCAD code to STL and return the binary data."""
-    with tempfile.NamedTemporaryFile(suffix=".scad", mode="w", delete=False) as f:
+    with tempfile.NamedTemporaryFile(suffix=".scad", mode="w", encoding="utf-8", delete=False) as f:
         f.write(code)
         scad_path = f.name
 
@@ -143,12 +141,10 @@ async def render_stl(code: str, settings: Settings) -> bytes:
             scad_path,
         ]
 
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        await asyncio.wait_for(proc.communicate(), timeout=60)
+        def _run():
+            return subprocess.run(cmd, capture_output=True, timeout=60)
+
+        proc = await asyncio.to_thread(_run)
 
         if proc.returncode != 0 or not Path(stl_path).exists():
             raise RuntimeError("OpenSCAD STL export failed")

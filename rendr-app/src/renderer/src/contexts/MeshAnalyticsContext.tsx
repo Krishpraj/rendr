@@ -1,11 +1,14 @@
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import { createContext, useContext, useState, useRef, type ReactNode } from 'react'
 import type { MeshAnalytics } from '@/lib/meshAnalytics'
+import * as THREE from 'three'
 
 interface MeshAnalyticsContextValue {
   analytics: MeshAnalytics | null
   stlSize: number | null
+  geometry: THREE.BufferGeometry | null
   setAnalytics: (a: MeshAnalytics | null) => void
   setStlSize: (s: number | null) => void
+  setGeometry: (g: THREE.BufferGeometry | null) => void
 }
 
 const MeshAnalyticsContext = createContext<MeshAnalyticsContextValue | null>(null)
@@ -13,9 +16,10 @@ const MeshAnalyticsContext = createContext<MeshAnalyticsContextValue | null>(nul
 export function MeshAnalyticsProvider({ children }: { children: ReactNode }) {
   const [analytics, setAnalytics] = useState<MeshAnalytics | null>(null)
   const [stlSize, setStlSize] = useState<number | null>(null)
+  const [geometry, setGeometry] = useState<THREE.BufferGeometry | null>(null)
 
   return (
-    <MeshAnalyticsContext.Provider value={{ analytics, stlSize, setAnalytics, setStlSize }}>
+    <MeshAnalyticsContext.Provider value={{ analytics, stlSize, geometry, setAnalytics, setStlSize, setGeometry }}>
       {children}
     </MeshAnalyticsContext.Provider>
   )

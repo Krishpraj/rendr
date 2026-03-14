@@ -20,7 +20,7 @@ export function ProjectWorkspace() {
   const { currentProject, setCurrentProject } = useProject()
   const { clearMessages } = useChat()
   const health = useBackendHealth()
-  const [sidebarTab, setSidebarTab] = useState<'chat' | 'code' | 'params' | 'analysis'>('chat')
+  const [sidebarTab, setSidebarTab] = useState<'chat' | 'code' | 'params' | 'analysis' | 'layers'>('chat')
 
   const isConnected = health.isSuccess
 

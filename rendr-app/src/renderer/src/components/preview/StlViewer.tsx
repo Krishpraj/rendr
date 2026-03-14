@@ -199,6 +199,7 @@ export function StlViewer({ code }: StlViewerProps) {
       const a = analyzeMesh(cache.geometry)
       setMeshAnalytics(a)
       meshCtx.setAnalytics(a)
+      meshCtx.setGeometry(cache.geometry)
       return
     }
 
@@ -228,6 +229,7 @@ export function StlViewer({ code }: StlViewerProps) {
           setGeometry(geo)
           setMeshAnalytics(a)
           meshCtx.setAnalytics(a)
+          meshCtx.setGeometry(geo)
           meshCtx.setStlSize(buffer.byteLength)
           setLoading(false)
         }

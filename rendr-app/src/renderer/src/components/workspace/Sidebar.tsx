@@ -1,11 +1,12 @@
-import { MessageSquare, Code2, SlidersHorizontal, BarChart3 } from 'lucide-react'
+import { MessageSquare, Code2, SlidersHorizontal, BarChart3, Layers } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ChatPanel } from '@/components/chat/ChatPanel'
 import { CodePanel } from './CodePanel'
 import { ParametersPanel } from './ParametersPanel'
 import { AnalysisPanel } from './AnalysisPanel'
+import { PrintSimPanel } from './PrintSimPanel'
 
-type TabId = 'chat' | 'code' | 'params' | 'analysis'
+type TabId = 'chat' | 'code' | 'params' | 'analysis' | 'layers'
 
 interface SidebarProps {
   activeTab: TabId
@@ -16,7 +17,8 @@ const TABS = [
   { id: 'chat' as const, icon: MessageSquare, label: 'chat' },
   { id: 'code' as const, icon: Code2, label: 'code' },
   { id: 'params' as const, icon: SlidersHorizontal, label: 'params' },
-  { id: 'analysis' as const, icon: BarChart3, label: 'analysis' }
+  { id: 'analysis' as const, icon: BarChart3, label: 'analysis' },
+  { id: 'layers' as const, icon: Layers, label: 'layers' }
 ]
 
 export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
@@ -29,7 +31,7 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
             key={id}
             onClick={() => onTabChange(id)}
             className={cn(
-              'flex h-7 items-center gap-1.5 rounded-md px-3 text-xs transition-all',
+              'flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs transition-all',
               activeTab === id
                 ? 'bg-r-elevated text-r-text'
                 : 'text-r-text-muted hover:text-r-text-secondary'
@@ -47,6 +49,7 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
         {activeTab === 'code' && <CodePanel />}
         {activeTab === 'params' && <ParametersPanel />}
         {activeTab === 'analysis' && <AnalysisPanel />}
+        {activeTab === 'layers' && <PrintSimPanel />}
       </div>
     </div>
   )

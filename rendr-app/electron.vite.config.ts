@@ -18,6 +18,7 @@ export default defineConfig({
     plugins: [react()],
     css: {
       postcss: resolve(__dirname, 'postcss.config.js')
-    }
+    },
+    assetsInclude: ['**/*.wasm']
   }
 })

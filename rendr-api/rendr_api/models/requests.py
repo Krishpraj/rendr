@@ -36,3 +36,7 @@ class RenderRequest(BaseModel):
     width: int = 512
     height: int = 512
     camera: str | None = None
+
+
+class StlRequest(BaseModel):
+    code: str

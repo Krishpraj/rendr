@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react'
 import { v4 as uuid } from 'uuid'
 import type { Project, Parameter } from '@/types'
+import { api } from '@/lib/api'
 
 interface ProjectContextValue {
   projects: Project[]
@@ -12,32 +13,29 @@ interface ProjectContextValue {
   renameProject: (id: string, name: string) => void
   duplicateProject: (id: string) => Project
   updateProjectCode: (code: string, parameters?: Parameter[], previewImage?: string | null) => void
+  loading: boolean
 }
 
 const ProjectContext = createContext<ProjectContextValue | null>(null)
 
-const STORAGE_KEY = 'rendr-projects'
-
-function loadProjects(): Project[] {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    return stored ? JSON.parse(stored) : []
-  } catch {
-    return []
-  }
-}
-
-function persistProjects(projects: Project[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(projects))
-}
-
 export function ProjectProvider({ children }: { children: ReactNode }) {
-  const [projects, setProjects] = useState<Project[]>(loadProjects)
+  const [projects, setProjects] = useState<Project[]>([])
   const [currentProject, setCurrentProject] = useState<Project | null>(null)
+  const [loading, setLoading] = useState(true)
 
+  // Load projects from backend on mount
   useEffect(() => {
-    persistProjects(projects)
-  }, [projects])
+    api
+      .listProjects()
+      .then((data) => {
+        setProjects(data)
+        setLoading(false)
+      })
+      .catch((err) => {
+        console.error('Failed to load projects from backend:', err)
+        setLoading(false)
+      })
+  }, [])
 
   const createProject = useCallback((name?: string) => {
     const project: Project = {
@@ -51,6 +49,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     }
     setProjects((prev) => [project, ...prev])
     setCurrentProject(project)
+    api.createProject(project).catch((err) => console.error('Failed to save project:', err))
     return project
   }, [])
 
@@ -58,21 +57,33 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     const updated = { ...project, updatedAt: new Date().toISOString() }
     setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
     setCurrentProject((curr) => (curr?.id === updated.id ? updated : curr))
+    api
+      .updateProject(updated.id, {
+        name: updated.name,
+        code: updated.code,
+        parameters: updated.parameters,
+        previewImage: updated.previewImage,
+        updatedAt: updated.updatedAt
+      })
+      .catch((err) => console.error('Failed to update project:', err))
   }, [])
 
   const deleteProject = useCallback(
     (id: string) => {
       setProjects((prev) => prev.filter((p) => p.id !== id))
       if (currentProject?.id === id) setCurrentProject(null)
+      api.deleteProject(id).catch((err) => console.error('Failed to delete project:', err))
     },
     [currentProject]
   )
 
   const renameProject = useCallback((id: string, name: string) => {
+    const now = new Date().toISOString()
     setProjects((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, name, updatedAt: new Date().toISOString() } : p))
+      prev.map((p) => (p.id === id ? { ...p, name, updatedAt: now } : p))
     )
     setCurrentProject((curr) => (curr?.id === id ? { ...curr, name } : curr))
+    api.updateProject(id, { name, updatedAt: now }).catch((err) => console.error('Failed to rename project:', err))
   }, [])
 
   const duplicateProject = useCallback(
@@ -88,6 +99,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       }
       setProjects((prev) => [dup, ...prev])
       setCurrentProject(dup)
+      api.createProject(dup).catch((err) => console.error('Failed to save duplicated project:', err))
       return dup
     },
     [projects]
@@ -105,6 +117,14 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
           updatedAt: new Date().toISOString()
         }
         setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+        api
+          .updateProject(updated.id, {
+            code: updated.code,
+            parameters: updated.parameters,
+            previewImage: updated.previewImage,
+            updatedAt: updated.updatedAt
+          })
+          .catch((err) => console.error('Failed to update project code:', err))
         return updated
       })
     },
@@ -122,7 +142,8 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         deleteProject,
         renameProject,
         duplicateProject,
-        updateProjectCode
+        updateProjectCode,
+        loading
       }}
     >
       {children}

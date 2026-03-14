@@ -14,16 +14,16 @@ import { useState } from 'react'
 export function ProjectsSidebar() {
   const { projects, currentProject, setCurrentProject, createProject, deleteProject, renameProject, duplicateProject } =
     useProject()
-  const { clearMessages } = useChat()
+  const { clearMessages, loadMessages } = useChat()
   const [isExpanded, setIsExpanded] = useState(true)
 
   const handleSelect = (project: typeof projects[0]) => {
     setCurrentProject(project)
-    clearMessages()
+    loadMessages(project.id)
   }
 
   const handleNew = () => {
-    createProject()
+    const p = createProject()
     clearMessages()
   }
 

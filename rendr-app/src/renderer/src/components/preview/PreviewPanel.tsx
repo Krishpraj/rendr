@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react'
 import { useProject } from '@/contexts/ProjectContext'
 import { useRender } from '@/hooks/useRender'
-import { Loader2, Box, Image, Code2, Copy, Check } from 'lucide-react'
+import { Loader2, Box, Image, Code2, Copy, Check, Rotate3D } from 'lucide-react'
+import { StlViewer } from './StlViewer'
 
-type ViewMode = 'preview' | 'code'
+type ViewMode = 'preview' | '3d' | 'code'
 
 export function PreviewPanel() {
   const { currentProject, updateProjectCode } = useProject()
   const render = useRender()
-  const [viewMode, setViewMode] = useState<ViewMode>('preview')
+  const [viewMode, setViewMode] = useState<ViewMode>('3d')
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
@@ -50,32 +51,30 @@ export function PreviewPanel() {
     )
   }
 
+  const tabs: { mode: ViewMode; icon: React.ReactNode; label: string }[] = [
+    { mode: '3d', icon: <Rotate3D className="h-3.5 w-3.5" />, label: '3D View' },
+    { mode: 'preview', icon: <Image className="h-3.5 w-3.5" />, label: 'Preview' },
+    { mode: 'code', icon: <Code2 className="h-3.5 w-3.5" />, label: 'Code' }
+  ]
+
   return (
     <div className="flex h-full flex-col bg-vsc-editor">
       {/* Tab bar */}
       <div className="flex items-center border-b border-vsc-border bg-vsc-sidebar px-2">
-        <button
-          onClick={() => setViewMode('preview')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] border-b-2 transition-colors ${
-            viewMode === 'preview'
-              ? 'border-vsc-blue text-vsc-text'
-              : 'border-transparent text-vsc-text-dim hover:text-vsc-text'
-          }`}
-        >
-          <Image className="h-3.5 w-3.5" />
-          Preview
-        </button>
-        <button
-          onClick={() => setViewMode('code')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] border-b-2 transition-colors ${
-            viewMode === 'code'
-              ? 'border-vsc-blue text-vsc-text'
-              : 'border-transparent text-vsc-text-dim hover:text-vsc-text'
-          }`}
-        >
-          <Code2 className="h-3.5 w-3.5" />
-          Code
-        </button>
+        {tabs.map((tab) => (
+          <button
+            key={tab.mode}
+            onClick={() => setViewMode(tab.mode)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] border-b-2 transition-colors ${
+              viewMode === tab.mode
+                ? 'border-vsc-blue text-vsc-text'
+                : 'border-transparent text-vsc-text-dim hover:text-vsc-text'
+            }`}
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* Content */}
@@ -93,6 +92,8 @@ export function PreviewPanel() {
               <code>{currentProject.code}</code>
             </pre>
           </div>
+        ) : viewMode === '3d' ? (
+          <StlViewer code={currentProject.code} />
         ) : render.isPending ? (
           <div className="flex h-full flex-col items-center justify-center">
             <Loader2 className="mb-2 h-6 w-6 animate-spin text-vsc-blue" />

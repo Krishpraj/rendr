@@ -6,7 +6,9 @@ import type {
   ParameterUpdateResponse,
   RenderRequest,
   RenderResponse,
-  StreamEvent
+  StreamEvent,
+  Project,
+  ChatMessage
 } from '@/types'
 
 const BASE_URL = 'http://localhost:8000/api/v1'
@@ -66,7 +68,7 @@ export const api = {
   },
 
   updateParams: (req: ParameterUpdateRequest) =>
-    request<ParameterUpdateResponse>('/params', {
+    request<ParameterUpdateResponse>('/params/update', {
       method: 'POST',
       body: JSON.stringify(req)
     }),
@@ -75,5 +77,59 @@ export const api = {
     request<RenderResponse>('/render', {
       method: 'POST',
       body: JSON.stringify(req)
+    }),
+
+  renderStl: async (code: string): Promise<ArrayBuffer> => {
+    const res = await fetch(`${BASE_URL}/render-stl`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code })
     })
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(`API error ${res.status}: ${text}`)
+    }
+    return res.arrayBuffer()
+  },
+
+  // ── Projects ──
+
+  listProjects: () => request<Project[]>('/projects'),
+
+  getProject: (id: string) => request<Project>(`/projects/${id}`),
+
+  createProject: (project: Project) =>
+    request<Project>('/projects', {
+      method: 'POST',
+      body: JSON.stringify(project)
+    }),
+
+  updateProject: (id: string, data: Partial<Project> & { updatedAt: string }) =>
+    request<Project>(`/projects/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }),
+
+  deleteProject: (id: string) =>
+    fetch(`${BASE_URL}/projects/${id}`, { method: 'DELETE' }),
+
+  // ── Chat Messages ──
+
+  getMessages: (projectId: string) =>
+    request<ChatMessage[]>(`/projects/${projectId}/messages`),
+
+  saveMessage: (projectId: string, message: ChatMessage) =>
+    request<ChatMessage>(`/projects/${projectId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(message)
+    }),
+
+  saveMessagesBulk: (projectId: string, messages: ChatMessage[]) =>
+    request<{ status: string }>(`/projects/${projectId}/messages`, {
+      method: 'PUT',
+      body: JSON.stringify({ messages })
+    }),
+
+  deleteMessages: (projectId: string) =>
+    fetch(`${BASE_URL}/projects/${projectId}/messages`, { method: 'DELETE' })
 }

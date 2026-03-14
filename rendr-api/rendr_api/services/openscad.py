@@ -128,5 +128,36 @@ async def render_png(
         Path(png_path).unlink(missing_ok=True)
 
 
+async def render_stl(code: str, settings: Settings) -> bytes:
+    """Render OpenSCAD code to STL and return the binary data."""
+    with tempfile.NamedTemporaryFile(suffix=".scad", mode="w", delete=False) as f:
+        f.write(code)
+        scad_path = f.name
+
+    stl_path = scad_path.replace(".scad", ".stl")
+
+    try:
+        cmd = [
+            settings.openscad_path,
+            "-o", stl_path,
+            scad_path,
+        ]
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        await asyncio.wait_for(proc.communicate(), timeout=60)
+
+        if proc.returncode != 0 or not Path(stl_path).exists():
+            raise RuntimeError("OpenSCAD STL export failed")
+
+        return Path(stl_path).read_bytes()
+    finally:
+        Path(scad_path).unlink(missing_ok=True)
+        Path(stl_path).unlink(missing_ok=True)
+
+
 def encode_png_base64(data: bytes) -> str:
     return base64.b64encode(data).decode("ascii")

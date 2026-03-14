@@ -103,11 +103,9 @@ export function StatusBar() {
         </DropdownMenu>
 
         {/* OpenSCAD status */}
-        {health.data && (
-          <button className="flex h-full items-center gap-1 px-2 hover:bg-vsc-statusbar-hover transition-colors">
-            <span>OpenSCAD: {health.data.openscad_available ? 'OK' : 'Missing'}</span>
-          </button>
-        )}
+        <button className="flex h-full items-center gap-1 px-2 hover:bg-vsc-statusbar-hover transition-colors">
+          <span>OpenSCAD: WASM</span>
+        </button>
 
         {/* Model selector */}
         <button className="flex h-full items-center gap-1 px-2 hover:bg-vsc-statusbar-hover transition-colors">

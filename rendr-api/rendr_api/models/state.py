@@ -5,6 +5,7 @@ class PipelineState(TypedDict, total=False):
     original_code: str
     user_prompt: str
     part_labels: list[dict]
+    canvas_state: dict | None
     analysis: str
     plan: str
     generated_code: str

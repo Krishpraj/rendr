@@ -1,46 +1,78 @@
-import { useRef, useState, useEffect, useMemo } from 'react'
-import { Canvas } from '@react-three/fiber'
-import { OrbitControls, Center } from '@react-three/drei'
+// @ts-nocheck
+import { useRef, useState, useEffect, Suspense } from 'react'
+import { Canvas, useThree } from '@react-three/fiber'
+import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
-import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { Loader2, AlertCircle } from 'lucide-react'
-import { scadToStl } from '@/lib/openscad'
+import { compileScad } from '@/lib/openscad'
+import { parseOff } from '../../../openscad-playground/src/io/import_off'
+import { exportGlb } from '../../../openscad-playground/src/io/export_glb'
 
 interface StlViewerProps {
   code: string
 }
 
-function StlModel({ geometry }: { geometry: THREE.BufferGeometry }) {
-  const meshRef = useRef<THREE.Mesh>(null)
+let cache: { code: string; glbArrayBuffer: ArrayBuffer } | null = null
 
-  const material = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: '#4a9eff',
-        metalness: 0.15,
-        roughness: 0.6,
-        flatShading: false
-      }),
-    []
-  )
+function GlbModel({ buffer }: { buffer: ArrayBuffer }) {
+  const [scene, setScene] = useState<THREE.Group | null>(null)
+  const { camera } = useThree()
 
   useEffect(() => {
-    geometry.computeVertexNormals()
-  }, [geometry])
+    const loader = new GLTFLoader()
+    loader.parse(buffer, '', (gltf) => {
+      console.log('[GlbModel] GLTF loaded, scene children:', gltf.scene.children.length)
+      setScene(gltf.scene)
+    }, (err) => {
+      console.error('[GlbModel] GLTFLoader error:', err)
+    })
+  }, [buffer])
 
-  return (
-    <Center>
-      <mesh ref={meshRef} geometry={geometry} material={material} />
-    </Center>
-  )
+  useEffect(() => {
+    if (!scene) return
+
+    // OpenSCAD is Z-up, Three.js is Y-up: rotate -90° around X
+    scene.rotation.x = -Math.PI / 2
+
+    // Auto-fit camera to model
+    const box = new THREE.Box3().setFromObject(scene)
+    const center = box.getCenter(new THREE.Vector3())
+    const size = box.getSize(new THREE.Vector3())
+    const maxDim = Math.max(size.x, size.y, size.z)
+    const dist = maxDim * 2
+
+    // Center the model
+    scene.position.x = -center.x
+    scene.position.y = -center.y
+    scene.position.z = -center.z
+
+    if (camera instanceof THREE.PerspectiveCamera) {
+      camera.position.set(dist * 0.7, dist * 0.5, dist * 0.7)
+      camera.near = maxDim * 0.01
+      camera.far = maxDim * 100
+      camera.updateProjectionMatrix()
+    }
+    camera.lookAt(0, 0, 0)
+  }, [scene, camera])
+
+  if (!scene) return null
+
+  // Ensure all materials are visible with proper coloring
+  scene.traverse((child) => {
+    if (child instanceof THREE.Mesh && child.material) {
+      const mat = child.material as THREE.MeshStandardMaterial
+      mat.metalness = 0
+      mat.roughness = 0.6
+    }
+  })
+
+  return <primitive object={scene} />
 }
 
-// Global cache so geometry survives tab switches / remounts
-const cache: { code: string; geometry: THREE.BufferGeometry } | null = { code: '', geometry: null as any }
-
 export function StlViewer({ code }: StlViewerProps) {
-  const [geometry, setGeometry] = useState<THREE.BufferGeometry | null>(
-    cache?.code === code ? cache.geometry : null
+  const [glbBuffer, setGlbBuffer] = useState<ArrayBuffer | null>(
+    cache?.code === code ? cache.glbArrayBuffer : null
   )
   const [loading, setLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState('Building 3D model...')
@@ -50,38 +82,42 @@ export function StlViewer({ code }: StlViewerProps) {
   useEffect(() => {
     if (!code) return
 
-    // Already have cached geometry for this code
-    if (cache?.code === code && cache.geometry) {
-      setGeometry(cache.geometry)
+    if (cache?.code === code && cache.glbArrayBuffer) {
+      setGlbBuffer(cache.glbArrayBuffer)
       return
     }
 
-    // Already rendering this code
     if (renderingRef.current === code) return
     renderingRef.current = code
 
     setLoading(true)
     setLoadingMessage('Initializing OpenSCAD...')
     setError(null)
-    setGeometry(null)
+    setGlbBuffer(null)
 
     const thisCode = code
 
-    scadToStl(thisCode, (status) => {
+    compileScad(thisCode, (status) => {
       if (renderingRef.current === thisCode) setLoadingMessage(status)
     })
-      .then((buffer) => {
-        const loader = new STLLoader()
-        const geo = loader.parse(buffer)
+      .then(async (output) => {
+        if (renderingRef.current !== thisCode) return
 
-        // Cache globally
-        cache.code = thisCode
-        cache.geometry = geo
+        setLoadingMessage('Converting to 3D view...')
 
-        // Only update state if this is still the current render
-        if (renderingRef.current === thisCode) {
-          setGeometry(geo)
-          setLoading(false)
+        if (output.format === 'off' && output.offText) {
+          const polyhedron = parseOff(output.offText)
+          const blob = await exportGlb(polyhedron)
+          const arrayBuffer = await blob.arrayBuffer()
+
+          cache = { code: thisCode, glbArrayBuffer: arrayBuffer }
+
+          if (renderingRef.current === thisCode) {
+            setGlbBuffer(arrayBuffer)
+            setLoading(false)
+          }
+        } else {
+          throw new Error('No OFF output from OpenSCAD')
         }
       })
       .catch((err) => {
@@ -113,7 +149,7 @@ export function StlViewer({ code }: StlViewerProps) {
     )
   }
 
-  if (!geometry) {
+  if (!glbBuffer) {
     return (
       <div className="flex h-full flex-col items-center justify-center">
         <p className="text-[13px] text-vsc-text-dim">No model to display</p>
@@ -122,24 +158,19 @@ export function StlViewer({ code }: StlViewerProps) {
   }
 
   return (
-    <div className="h-full w-full">
-      <Canvas
-        camera={{ position: [100, 100, 100], fov: 50, near: 0.1, far: 10000 }}
-        gl={{ antialias: true, powerPreference: 'default' }}
-        style={{ background: '#1e1e1e' }}
-        onCreated={({ gl }) => {
-          const canvas = gl.domElement
-          canvas.addEventListener('webglcontextlost', (e) => e.preventDefault())
-          canvas.addEventListener('webglcontextrestored', () => gl.resetState())
-        }}
-      >
-        <ambientLight intensity={0.4} />
-        <directionalLight position={[50, 80, 50]} intensity={0.8} />
-        <directionalLight position={[-30, -20, -50]} intensity={0.3} />
-        <StlModel geometry={geometry} />
-        <OrbitControls makeDefault enableDamping dampingFactor={0.1} />
-        <gridHelper args={[200, 20, '#333333', '#262626']} />
-      </Canvas>
-    </div>
+    <Canvas
+      gl={{ antialias: true }}
+      camera={{ fov: 50 }}
+      style={{ width: '100%', height: '100%', background: '#1e1e1e' }}
+    >
+      <ambientLight intensity={0.6} />
+      <directionalLight position={[5, 8, 5]} intensity={1.2} />
+      <directionalLight position={[-5, -3, 4]} intensity={0.6} />
+      <directionalLight position={[0, -5, -5]} intensity={0.3} />
+      <Suspense fallback={null}>
+        <GlbModel buffer={glbBuffer} />
+      </Suspense>
+      <OrbitControls makeDefault />
+    </Canvas>
   )
 }

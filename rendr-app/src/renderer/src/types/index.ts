@@ -30,12 +30,23 @@ export interface PartLabel {
   bbox: Record<string, unknown> | null
 }
 
+export interface CanvasState {
+  camera_position: [number, number, number] | null
+  camera_target: [number, number, number] | null
+  model_bbox_min: [number, number, number] | null
+  model_bbox_max: [number, number, number] | null
+  model_dimensions: [number, number, number] | null
+  model_center: [number, number, number] | null
+  zoom_distance: number | null
+}
+
 export interface EditRequest {
   code: string
   prompt: string
   provider?: string | null
   model?: string | null
   part_labels?: PartLabel[]
+  canvas_state?: CanvasState | null
   skip_validation?: boolean
   skip_refinement?: boolean
   stream?: boolean

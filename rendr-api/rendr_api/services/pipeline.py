@@ -16,6 +16,7 @@ from rendr_api.services.prompts import (
     ANALYZE_AND_PLAN_PROMPT,
     REVIEW_CHECKLIST,
     STRICT_CODE_PROMPT,
+    format_canvas_context,
 )
 
 
@@ -58,6 +59,7 @@ def build_pipeline(settings: Settings) -> StateGraph:
                 for p in state["part_labels"]
             )
             part_context = f"\n\nPart labels:\n{parts}"
+        canvas_context = format_canvas_context(state.get("canvas_state"))
 
         messages = []
         # Prepend conversation history if available
@@ -67,14 +69,14 @@ def build_pipeline(settings: Settings) -> StateGraph:
                 messages.append(msg)
             messages.append({
                 "role": "user",
-                "content": f"Now analyze and plan for this new request:\n\nUser request: {state['user_prompt']}{code_context}{part_context}",
+                "content": f"Now analyze and plan for this new request:\n\nUser request: {state['user_prompt']}{code_context}{part_context}{canvas_context}",
             })
         else:
             messages = [
                 {"role": "system", "content": ANALYZE_AND_PLAN_PROMPT},
                 {
                     "role": "user",
-                    "content": f"Analyze this OpenSCAD project and produce a modification plan.\n\nUser request: {state['user_prompt']}{code_context}{part_context}",
+                    "content": f"Analyze this OpenSCAD project and produce a modification plan.\n\nUser request: {state['user_prompt']}{code_context}{part_context}{canvas_context}",
                 },
             ]
 
@@ -113,6 +115,7 @@ def build_pipeline(settings: Settings) -> StateGraph:
         existing = ""
         if state.get("original_code"):
             existing = f"\n\nExisting code to modify:\n{state['original_code']}"
+        canvas_context = format_canvas_context(state.get("canvas_state"))
 
         messages = [
             {"role": "system", "content": STRICT_CODE_PROMPT},
@@ -123,7 +126,7 @@ def build_pipeline(settings: Settings) -> StateGraph:
                 messages.append(msg)
         messages.append({
             "role": "user",
-            "content": f"Generate OpenSCAD code for: {state['user_prompt']}\n\nPlan:\n{state['plan']}{existing}{feedback}",
+            "content": f"Generate OpenSCAD code for: {state['user_prompt']}\n\nPlan:\n{state['plan']}{existing}{feedback}{canvas_context}",
         })
 
         provider, model = _pick_model(state, settings, is_generation=True)

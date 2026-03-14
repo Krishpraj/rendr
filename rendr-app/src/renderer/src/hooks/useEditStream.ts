@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { api } from '@/lib/api'
 import { useChat } from '@/contexts/ChatContext'
 import { useProject } from '@/contexts/ProjectContext'
+import { getCanvasState } from '@/components/preview/PreviewPanel'
 import type { EditRequest, PipelineStage } from '@/types'
 
 interface SendOptions {
@@ -12,7 +13,7 @@ interface SendOptions {
 }
 
 export function useEditStream() {
-  const { addMessage, updateLastAssistant, setIsStreaming, setCurrentStage } = useChat()
+  const { messages, addMessage, updateLastAssistant, setIsStreaming, setCurrentStage } = useChat()
   const { updateProjectCode, currentProject } = useProject()
 
   const sendPrompt = useCallback(
@@ -24,6 +25,11 @@ export function useEditStream() {
 
       const completedStages: PipelineStage[] = []
 
+      // Build conversation history for the LLM
+      const chatHistory = messages
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .map((m) => ({ role: m.role, content: m.content }))
+
       try {
         const req: EditRequest = {
           code: currentProject?.code || '',
@@ -31,8 +37,10 @@ export function useEditStream() {
           stream: true,
           model: options?.model || undefined,
           provider: options?.provider || undefined,
+          canvas_state: getCanvasState() || undefined,
           skip_validation: options?.skipValidation,
-          skip_refinement: options?.skipRefinement
+          skip_refinement: options?.skipRefinement,
+          messages: chatHistory
         }
 
         for await (const event of api.editStream(req)) {
@@ -87,7 +95,8 @@ export function useEditStream() {
       setIsStreaming,
       setCurrentStage,
       currentProject,
-      updateProjectCode
+      updateProjectCode,
+      messages
     ]
   )
 

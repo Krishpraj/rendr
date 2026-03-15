@@ -2,7 +2,7 @@
 
 Text-to-CAD desktop app. Describe a 3D model in plain English and get OpenSCAD code, a live 3D preview, and exportable files.
 
-Built with Electron + React (frontend) and FastAPI + LangGraph (backend).
+Built with Electron + React (frontend) and FastAPI + LangGraph + [Railtracks](https://github.com/railtracks/railtracks) (backend).
 
 ## Prerequisites
 
@@ -82,10 +82,11 @@ The API runs on `http://localhost:8000` and the Electron app connects to it auto
 ## How It Works
 
 1. You describe a 3D model in the chat
-2. The backend runs a multi-stage pipeline: **Analyze → Generate → Validate → Review**
-3. OpenSCAD code is generated, compiled to STL via WASM in the browser, and rendered in a 3D viewer
-4. You can refine the model with follow-up prompts
-5. Export as `.scad` or `.png`
+2. The backend runs a multi-stage LangGraph pipeline: **Analyze → Generate → Validate → Review**
+3. The **Review** step uses a [Railtracks](https://github.com/railtracks/railtracks) agent with tool nodes to validate parameters and check geometry best practices
+4. OpenSCAD code is generated, compiled to STL via WASM in the browser, and rendered in a 3D viewer
+5. You can refine the model with follow-up prompts
+6. Export as `.scad` or `.png`
 
 ## Backend Configuration
 
@@ -116,7 +117,7 @@ rendr/
 │   │   ├── main.py           # App entry point
 │   │   ├── config.py         # Settings from .env
 │   │   ├── routers/          # API endpoints
-│   │   ├── services/         # LangGraph pipeline, OpenSCAD
+│   │   ├── services/         # LangGraph pipeline, Railtracks review agent, OpenSCAD
 │   │   └── models/           # Request/response schemas
 │   └── pyproject.toml
 ├── rendr-app/          # Electron + React frontend

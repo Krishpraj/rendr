@@ -84,6 +84,7 @@ CodeMirror 6 with syntax highlighting, bracket matching, code folding, search/re
 | Code editor | CodeMirror 6 |
 | 3D compilation | OpenSCAD WASM (client-side, Web Worker) |
 | Backend | FastAPI, Python 3.11+ |
+| Database | SQLite via aiosqlite (WAL mode, async) |
 | Pipeline orchestration | LangGraph |
 | Review agent | Railtracks |
 | LLM | Claude Sonnet 4 (primary), Claude Haiku 4.5 (fast steps) |
@@ -194,7 +195,8 @@ rendr/
 │   │   │   ├── review_agent.py # Railtracks agent with tool nodes
 │   │   │   ├── openscad.py     # OpenSCAD CLI wrapper
 │   │   │   ├── retrieval.py    # TF-IDF model search over dataset
-│   │   │   └── parameters.py   # OpenSCAD parameter extraction
+│   │   │   ├── parameters.py   # OpenSCAD parameter extraction
+│   │   │   └── database.py     # SQLite persistence (projects, chat history)
 │   │   └── models/             # Pydantic request/response schemas
 │   ├── train-00000-of-00001.parquet  # 7,378 OpenSCAD models
 │   └── pyproject.toml

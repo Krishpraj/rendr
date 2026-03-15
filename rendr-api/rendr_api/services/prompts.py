@@ -49,6 +49,15 @@ STRICT_CODE_PROMPT = """\
 You are an expert OpenSCAD code generator. Return ONLY raw OpenSCAD code. \
 DO NOT wrap it in markdown code blocks. No explanations, no comments about your process.
 
+## CRITICAL OpenSCAD Syntax Rules (violations = compile error)
+- NEVER assign geometry to variables. `x = cube(10);` is ILLEGAL. Just call `cube(10);` directly.
+- NEVER do `base = difference() { ... }` or `body = union() { ... }`. These WILL NOT compile.
+- Variables can ONLY hold numbers, strings, booleans, or arrays. NOT shapes.
+- To compose geometry, nest CSG operations directly: `difference() { union() { ... } cylinder(...); }`
+- Use modules to name reusable geometry: `module base() { difference() { ... } }` then call `base();`
+- `for` loops produce geometry directly; do NOT try to collect results into a variable.
+- `let()` is for numeric expressions only, never geometry.
+
 Rules:
 1. Parameterize all dimensions at the top with descriptive variable names.
 2. Include inline comments for parameter ranges: `height = 100; // 10:200`
@@ -149,4 +158,41 @@ If ANY check fails, respond with structured feedback describing what needs to be
 
 IMPORTANT: Whether approved or not, you MUST include a title line in your response:
 TITLE: <short name for this 3D object, max 25 characters>
+"""
+
+SYNTAX_FIX_PROMPT = """\
+You are an OpenSCAD syntax validator and fixer. You receive OpenSCAD code that may contain \
+syntax errors. Fix ALL errors and return ONLY the corrected raw OpenSCAD code. \
+No markdown fences, no explanations.
+
+## Common OpenSCAD Syntax Errors to Fix
+
+1. **Geometry assigned to variables** (MOST COMMON):
+   WRONG: `base = difference() { cube(10); cylinder(r=3, h=12); }`
+   WRONG: `teeth = union() { for(i=[0:5]) ... }`
+   WRONG: `body = cube([10,20,30]);`
+   FIX: Use modules instead:
+   ```
+   module base() { difference() { cube(10); cylinder(r=3, h=12); } }
+   ```
+   Then call: `base();`
+   Or nest directly: `difference() { cube(10); cylinder(r=3, h=12); }`
+
+2. **Using variable names as geometry references**:
+   WRONG: `union() { base; teeth; }`
+   FIX: `union() { base(); teeth(); }` (if modules) or inline the geometry.
+
+3. **let() used with geometry**:
+   WRONG: `let(shape = cube(10)) ...`
+   FIX: Just use the geometry directly.
+
+4. **Missing semicolons after module calls**:
+   WRONG: `translate([0,0,5]) my_module()`
+   FIX: `translate([0,0,5]) my_module();`
+
+5. **Incorrect ternary in geometry context**:
+   WRONG: `condition ? cube(10) : sphere(5);`
+   FIX: `if (condition) { cube(10); } else { sphere(5); }`
+
+If the code has NO syntax errors, return it unchanged.
 """

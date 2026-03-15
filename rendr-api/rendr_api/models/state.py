@@ -24,3 +24,5 @@ class PipelineState(TypedDict, total=False):
     fast: bool
     fast_provider: str
     fast_model: str
+    retrieved_references: str
+    direct_match: bool

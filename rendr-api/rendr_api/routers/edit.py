@@ -17,7 +17,9 @@ from rendr_api.services.prompts import (
     ANALYZE_AND_PLAN_PROMPT,
     REVIEW_CHECKLIST,
     STRICT_CODE_PROMPT,
+    SYNTAX_FIX_PROMPT,
 )
+from rendr_api.services.retrieval import DIRECT_MATCH_THRESHOLD, ScadRetriever
 from rendr_api.services.review_agent import build_review_agent
 
 router = APIRouter()
@@ -68,6 +70,7 @@ async def edit(
         "fast": req.fast,
         "fast_provider": settings.fast_provider,
         "fast_model": settings.fast_model,
+        "retrieved_references": "",
     }
 
     if req.stream:
@@ -113,6 +116,40 @@ async def _stream_pipeline(initial_state: dict, settings: Settings):
     async def emit(stage: str, status: str, **extra):
         data = {"stage": stage, "status": status, **extra}
         return json.dumps(data) + "\n"
+
+    # Retrieve similar models from the dataset
+    yield await emit("retrieve", "running")
+    results = []
+    try:
+        retriever = ScadRetriever.get_instance()
+        results = retriever.search(state["user_prompt"], top_k=3)
+        state["retrieved_references"] = retriever.format_references(results)
+        yield await emit("retrieve", "done", matches=len(results))
+    except Exception:
+        state["retrieved_references"] = ""
+        yield await emit("retrieve", "done", matches=0)
+
+    # Direct match: strong similarity + from-scratch → return dataset code, skip LLM entirely
+    if results and results[0].score >= DIRECT_MATCH_THRESHOLD and not state["original_code"]:
+        best = results[0]
+        code = postprocess(best.scad)
+        params = parse_parameters(code)
+        title = best.name
+        if len(title) > 27:
+            title = title[:24] + "..."
+        final = {
+            "code": code,
+            "title": title,
+            "parameters": [p.model_dump() for p in params],
+            "analysis": f"Direct match from dataset: {best.name} (score: {best.score:.2f})",
+            "plan": "Using existing model from dataset — no generation needed.",
+            "validation": None,
+            "refinements_applied": 0,
+            "model_used": model,
+            "provider_used": provider,
+        }
+        yield json.dumps({"stage": "complete", "status": "done", "result": final, "direct_match": True}) + "\n"
+        return
 
     # Route: skip analyze_and_plan for from-scratch
     if state["original_code"]:
@@ -187,9 +224,12 @@ async def _stream_pipeline(initial_state: dict, settings: Settings):
         if conversation_history:
             for msg in conversation_history:
                 gen_messages.append(msg)
+        ref_context = ""
+        if state.get("retrieved_references"):
+            ref_context = f"\n\n{state['retrieved_references']}"
         gen_messages.append({
             "role": "user",
-            "content": f"Generate OpenSCAD code for: {state['user_prompt']}\n\nPlan:\n{state['plan']}{existing}{feedback}",
+            "content": f"Generate OpenSCAD code for: {state['user_prompt']}\n\nPlan:\n{state['plan']}{existing}{feedback}{ref_context}",
         })
 
         gen_provider, gen_model = _model_for(is_generation=True)
@@ -197,6 +237,20 @@ async def _stream_pipeline(initial_state: dict, settings: Settings):
         code = extract_openscad_from_text(raw) or raw
         state["generated_code"] = postprocess(code)
         yield await emit("generate", "done", round=round_num)
+
+        # Syntax fix — check for common OpenSCAD errors and fix with LLM
+        import re as _re
+        if _re.search(r'\b\w+\s*=\s*(?:difference|union|intersection|hull|minkowski|linear_extrude|rotate_extrude|cube|sphere|cylinder|polyhedron|circle|square|polygon)\s*\(', state["generated_code"]):
+            yield await emit("syntax_fix", "running")
+            fix_provider, fix_model = _model_for()
+            fix_messages = [
+                {"role": "system", "content": SYNTAX_FIX_PROMPT},
+                {"role": "user", "content": state["generated_code"]},
+            ]
+            fix_raw = await chat_completion(fix_messages, settings, provider=fix_provider, model=fix_model)
+            fixed = extract_openscad_from_text(fix_raw) or fix_raw
+            state["generated_code"] = postprocess(fixed)
+            yield await emit("syntax_fix", "done")
 
         # Validate
         if not state.get("skip_validation"):

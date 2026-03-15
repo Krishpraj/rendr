@@ -17,6 +17,7 @@ function createWindow(): void {
     frame: false,
     titleBarStyle: 'hidden',
     titleBarOverlay: false,
+    icon: join(__dirname, '../../resources/icon.png'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false

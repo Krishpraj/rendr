@@ -2,52 +2,23 @@ import { useState, useCallback } from 'react'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import { useProject } from '@/contexts/ProjectContext'
 import { useChat } from '@/contexts/ChatContext'
-import { useBackendHealth } from '@/hooks/useBackendHealth'
 import { MeshAnalyticsProvider } from '@/contexts/MeshAnalyticsContext'
-import { ArrowLeft, Download, FileDown, Box } from 'lucide-react'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import { toast } from 'sonner'
+import { ArrowLeft, Box } from 'lucide-react'
 import { WindowControls } from '@/components/layout/WindowControls'
+import { StatusBar } from '@/components/layout/StatusBar'
 import { ViewerPanel } from './ViewerPanel'
 import { Sidebar } from './Sidebar'
 
 export function ProjectWorkspace() {
   const { currentProject, setCurrentProject } = useProject()
   const { clearMessages } = useChat()
-  const health = useBackendHealth()
   const [sidebarTab, setSidebarTab] = useState<'chat' | 'code' | 'params' | 'analysis' | 'layers'>('chat')
-
-  const isConnected = health.isSuccess
 
   const handleBack = useCallback(() => {
     setCurrentProject(null)
     clearMessages()
   }, [setCurrentProject, clearMessages])
 
-  const handleExport = async (format: 'scad' | 'stl') => {
-    if (!currentProject?.code) {
-      toast.error('No code to export')
-      return
-    }
-    try {
-      if (format === 'scad') {
-        const base64 = btoa(currentProject.code)
-        await window.api.exportFile(base64, `${currentProject.name}.scad`, [
-          { name: 'OpenSCAD', extensions: ['scad'] }
-        ])
-        toast.success('Exported .scad file')
-      } else if (format === 'stl') {
-        toast.info('Use the download button in the 3D viewer')
-      }
-    } catch (err) {
-      toast.error(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
-    }
-  }
 
   return (
     <MeshAnalyticsProvider>
@@ -59,7 +30,7 @@ export function ProjectWorkspace() {
       >
         {/* Left: back + project name */}
         <div
-          className="flex items-center gap-2"
+          className="flex min-w-0 items-center gap-2"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           <button
@@ -76,37 +47,11 @@ export function ProjectWorkspace() {
           </div>
         </div>
 
-        {/* Center: status */}
-        <div className="flex items-center gap-2">
-          <div className={`h-1.5 w-1.5 rounded-full ${isConnected ? 'bg-r-success' : 'bg-r-error'}`} />
-          <span className="text-2xs text-r-text-dim">{isConnected ? 'connected' : 'offline'}</span>
-          {isConnected && health.data?.model && (
-            <>
-              <span className="text-2xs text-r-text-dim">·</span>
-              <span className="text-2xs text-r-text-dim">{health.data.model}</span>
-            </>
-          )}
-        </div>
-
-        {/* Right: export + window controls */}
+        {/* Right: window controls */}
         <div
-          className="flex items-center gap-1"
+          className="flex shrink-0 items-center"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex h-7 items-center gap-1.5 rounded-md px-2 text-2xs text-r-text-muted transition-colors hover:bg-r-elevated hover:text-r-text-secondary">
-                <Download className="h-3 w-3" />
-                export
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleExport('scad')}>
-                <FileDown className="mr-2 h-3.5 w-3.5" />
-                OpenSCAD (.scad)
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
           <WindowControls />
         </div>
       </div>
@@ -125,6 +70,8 @@ export function ProjectWorkspace() {
           </Panel>
         </PanelGroup>
       </div>
+      {/* Status bar */}
+      <StatusBar />
     </div>
     </MeshAnalyticsProvider>
   )

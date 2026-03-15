@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useProject } from '@/contexts/ProjectContext'
 import { useChat } from '@/contexts/ChatContext'
+import { api } from '@/lib/api'
 import { ArrowRight, Plus, Trash2, Clock, Box, Pen } from 'lucide-react'
 import { CubeLogo } from '@/components/icons/CubeLogo'
 import {
@@ -76,6 +77,45 @@ export function WelcomeScreen() {
   const [prompt, setPrompt] = useState('')
   const [isCreating, setIsCreating] = useState(false)
   const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [previews, setPreviews] = useState<Record<string, string>>({})
+  const attemptedRef = useRef<Set<string>>(new Set())
+
+  // Generate previews for projects that have code but no previewImage
+  useEffect(() => {
+    if (loading) return
+    let cancelled = false
+
+    async function generatePreviews() {
+      // Check if backend has OpenSCAD available
+      try {
+        const health = await api.health()
+        if (!health.openscad_available) return
+      } catch {
+        return
+      }
+
+      const needsPreview = projects.filter(
+        (p) => p.code && !p.previewImage && !previews[p.id] && !attemptedRef.current.has(p.id)
+      )
+
+      // Generate sequentially to avoid overwhelming the backend
+      for (const project of needsPreview.slice(0, 6)) {
+        if (cancelled) break
+        attemptedRef.current.add(project.id)
+        try {
+          const data = await api.render({ code: project.code! })
+          if (!cancelled) {
+            setPreviews((prev) => ({ ...prev, [project.id]: data.image }))
+          }
+        } catch {
+          // OpenSCAD compilation failed for this project's code
+        }
+      }
+    }
+
+    generatePreviews()
+    return () => { cancelled = true }
+  }, [loading, projects])
 
   const handleCreate = () => {
     const text = prompt.trim()
@@ -211,9 +251,9 @@ export function WelcomeScreen() {
                       >
                         {/* Preview area — fixed height */}
                         <div className="flex h-32 w-full items-center justify-center overflow-hidden border-b border-r-border bg-r-bg/50">
-                          {project.previewImage ? (
+                          {(project.previewImage || previews[project.id]) ? (
                             <img
-                              src={`data:image/png;base64,${project.previewImage}`}
+                              src={`data:image/png;base64,${project.previewImage || previews[project.id]}`}
                               alt={project.name}
                               className="h-full w-full object-contain p-2"
                             />
@@ -274,10 +314,6 @@ export function WelcomeScreen() {
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="relative z-10 flex h-8 shrink-0 items-center justify-center text-2xs text-r-text-dim">
-        rendr
-      </div>
     </div>
   )
 }

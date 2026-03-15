@@ -20,6 +20,8 @@ interface ChatContextValue {
   setIsStreaming: (v: boolean) => void
   currentStage: PipelineStage | null
   setCurrentStage: (stage: PipelineStage | null) => void
+  streamCompletedStages: PipelineStage[]
+  setStreamCompletedStages: (stages: PipelineStage[]) => void
   projectId: string | null
   setProjectId: (id: string | null) => void
 }
@@ -30,6 +32,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [currentStage, setCurrentStage] = useState<PipelineStage | null>(null)
+  const [streamCompletedStages, setStreamCompletedStages] = useState<PipelineStage[]>([])
   const [projectId, setProjectId] = useState<string | null>(null)
 
   const loadMessages = useCallback((pid: string) => {
@@ -107,6 +110,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setIsStreaming,
         currentStage,
         setCurrentStage,
+        streamCompletedStages,
+        setStreamCompletedStages,
         projectId,
         setProjectId
       }}

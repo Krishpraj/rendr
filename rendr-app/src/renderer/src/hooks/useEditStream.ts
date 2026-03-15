@@ -12,7 +12,7 @@ interface SendOptions {
 }
 
 export function useEditStream() {
-  const { addMessage, updateLastAssistant, setIsStreaming, setCurrentStage } = useChat()
+  const { addMessage, updateLastAssistant, setIsStreaming, setCurrentStage, setStreamCompletedStages } = useChat()
   const { updateProjectCode, currentProject } = useProject()
 
   const sendPrompt = useCallback(
@@ -21,6 +21,7 @@ export function useEditStream() {
       addMessage('assistant', 'Starting pipeline...')
       setIsStreaming(true)
       setCurrentStage('analyze_and_plan')
+      setStreamCompletedStages([])
 
       const completedStages: PipelineStage[] = []
 
@@ -51,6 +52,7 @@ export function useEditStream() {
 
           if (event.status === 'done' && event.stage !== 'complete') {
             completedStages.push(event.stage)
+            setStreamCompletedStages([...completedStages])
           }
 
           if (event.stage === 'complete' && event.result) {
@@ -86,6 +88,7 @@ export function useEditStream() {
       updateLastAssistant,
       setIsStreaming,
       setCurrentStage,
+      setStreamCompletedStages,
       currentProject,
       updateProjectCode
     ]

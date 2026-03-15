@@ -1,6 +1,8 @@
 import { useBackendHealth } from '@/hooks/useBackendHealth'
 import { useProject } from '@/contexts/ProjectContext'
 import { useChat } from '@/contexts/ChatContext'
+import { useMeshAnalytics } from '@/contexts/MeshAnalyticsContext'
+import { formatNumber, formatSize } from '@/lib/meshAnalytics'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,7 +10,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
-import { Download, FileDown, AlertCircle, CheckCircle2, Cpu, GitBranch } from 'lucide-react'
+import { Download, FileDown, AlertCircle, CheckCircle2, Triangle, Ruler, Droplets } from 'lucide-react'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
 
@@ -16,10 +18,9 @@ export function StatusBar() {
   const health = useBackendHealth()
   const { currentProject } = useProject()
   const { isStreaming, currentStage } = useChat()
+  const { analytics } = useMeshAnalytics()
 
   const isConnected = health.isSuccess
-  const modelName = health.data?.model || 'claude-sonnet'
-  const provider = health.data?.provider || 'anthropic'
 
   const handleExport = async (format: 'scad' | 'png') => {
     if (!currentProject?.code) {
@@ -50,22 +51,14 @@ export function StatusBar() {
       {/* Left side */}
       <div className="flex h-full items-center">
         {/* Connection status */}
-        <button className="flex h-full items-center gap-1 px-2 hover:bg-vsc-statusbar-hover transition-colors">
+        <div className="flex h-full items-center gap-1 px-2">
           {isConnected ? (
-            <CheckCircle2 className="h-3.5 w-3.5" />
+            <CheckCircle2 className="h-3 w-3" />
           ) : (
-            <AlertCircle className="h-3.5 w-3.5" />
+            <AlertCircle className="h-3 w-3" />
           )}
           <span>{isConnected ? 'Connected' : 'Offline'}</span>
-        </button>
-
-        {/* Branch / project indicator */}
-        {currentProject && (
-          <button className="flex h-full items-center gap-1 px-2 hover:bg-vsc-statusbar-hover transition-colors">
-            <GitBranch className="h-3.5 w-3.5" />
-            <span className="max-w-[120px] truncate">{currentProject.name}</span>
-          </button>
-        )}
+        </div>
 
         {/* Pipeline status when streaming */}
         {isStreaming && currentStage && (
@@ -73,6 +66,28 @@ export function StatusBar() {
             <div className="h-2 w-2 animate-spin rounded-sm border border-vsc-statusbar-text border-t-transparent" />
             <span>{currentStage}...</span>
           </div>
+        )}
+
+        {/* Mesh stats */}
+        {analytics && analytics.triangles > 0 && (
+          <>
+            <div className="flex h-full items-center gap-1 px-2">
+              <Triangle className="h-3 w-3" />
+              <span>{formatNumber(analytics.triangles)} tris</span>
+            </div>
+
+            <div className="flex h-full items-center gap-1 px-2">
+              <Ruler className="h-3 w-3" />
+              <span>
+                {formatSize(analytics.boundingBox.width)} × {formatSize(analytics.boundingBox.height)} × {formatSize(analytics.boundingBox.depth)}
+              </span>
+            </div>
+
+            <div className="flex h-full items-center gap-1 px-2">
+              <Droplets className="h-3 w-3" />
+              <span>{analytics.isWatertight ? 'Watertight' : 'Not watertight'}</span>
+            </div>
+          </>
         )}
       </div>
 
@@ -84,7 +99,7 @@ export function StatusBar() {
         {/* Export */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex h-full items-center gap-1 px-2 hover:bg-vsc-statusbar-hover transition-colors">
+            <button className="flex h-full items-center gap-1.5 px-2.5 font-medium hover:bg-vsc-statusbar-hover transition-colors">
               <Download className="h-3.5 w-3.5" />
               <span>Export</span>
             </button>
@@ -101,22 +116,6 @@ export function StatusBar() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-
-        {/* OpenSCAD status */}
-        <button className="flex h-full items-center gap-1 px-2 hover:bg-vsc-statusbar-hover transition-colors">
-          <span>OpenSCAD: WASM</span>
-        </button>
-
-        {/* Model selector */}
-        <button className="flex h-full items-center gap-1 px-2 hover:bg-vsc-statusbar-hover transition-colors">
-          <Cpu className="h-3.5 w-3.5" />
-          <span>{modelName}</span>
-        </button>
-
-        {/* Provider */}
-        <button className="flex h-full items-center px-2 hover:bg-vsc-statusbar-hover transition-colors">
-          <span>{provider}</span>
-        </button>
       </div>
     </div>
   )

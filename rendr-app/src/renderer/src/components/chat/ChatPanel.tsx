@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
-import { ArrowUp, Loader2, ChevronDown, Zap, Sparkles } from 'lucide-react'
+import { ArrowUp, Loader2, ChevronDown, Zap, Sparkles, ChevronRight, RotateCcw } from 'lucide-react'
 import type { PipelineStage } from '@/types'
 
 const STAGES: { key: PipelineStage; label: string }[] = [
@@ -31,38 +31,64 @@ const MODELS = [
 
 type Mode = 'normal' | 'fast'
 
-function PipelineProgress({
+function PipelineChain({
   completedStages,
   currentStage
 }: {
-  completedStages?: PipelineStage[]
+  completedStages: PipelineStage[]
   currentStage: PipelineStage | null
 }) {
-  if (!currentStage && (!completedStages || completedStages.length === 0)) return null
+  if (!currentStage) return null
+
+  const currentIdx = STAGES.findIndex((s) => s.key === currentStage)
+  // Detect if we're going backwards (retrying) — current stage already completed before
+  const isRetrying = completedStages.includes(currentStage)
 
   return (
-    <div className="flex items-center gap-2 py-1.5">
-      {STAGES.map(({ key, label }) => {
-        const isDone =
-          completedStages?.includes(key) ||
-          (key === 'complete' && !currentStage && completedStages && completedStages.length > 0)
+    <div className="flex items-center gap-0.5 py-2 px-1">
+      {STAGES.map(({ key, label }, i) => {
+        const isDone = completedStages.includes(key) && key !== currentStage
         const isActive = currentStage === key
+        const isAhead = i > currentIdx
+
+        // Connector between stages
+        const connector = i > 0 && (
+          <div className="flex items-center px-0.5">
+            {isRetrying && i === currentIdx ? (
+              <RotateCcw className="h-2 w-2 text-r-warning/60" />
+            ) : (
+              <ChevronRight
+                className={`h-2.5 w-2.5 ${
+                  isDone || isActive ? 'text-r-success/40' : 'text-r-text-dim/15'
+                }`}
+              />
+            )}
+          </div>
+        )
+
         return (
-          <div key={key} className="flex items-center gap-1">
-            <div
-              className={`h-1.5 w-1.5 rounded-full transition-colors ${
-                isDone
-                  ? 'bg-r-success'
-                  : isActive
-                    ? 'bg-r-accent animate-pulse-dot'
-                    : 'bg-r-text-dim/30'
-              }`}
-            />
+          <div key={key} className="flex items-center">
+            {connector}
             <span
-              className={`text-2xs transition-colors ${
-                isDone ? 'text-r-success' : isActive ? 'text-r-accent' : 'text-r-text-dim/50'
+              className={`text-2xs transition-all ${
+                isActive
+                  ? isRetrying
+                    ? 'text-r-warning font-medium'
+                    : 'text-r-accent font-medium'
+                  : isDone
+                    ? 'text-r-success/70'
+                    : isAhead
+                      ? 'text-r-text-dim/25'
+                      : 'text-r-text-dim/40'
               }`}
             >
+              {isActive && (
+                <span
+                  className={`mr-1 inline-block h-1 w-1 rounded-full align-middle ${
+                    isRetrying ? 'bg-r-warning animate-pulse-dot' : 'bg-r-accent animate-pulse-dot'
+                  }`}
+                />
+              )}
               {label}
             </span>
           </div>
@@ -73,7 +99,7 @@ function PipelineProgress({
 }
 
 export function ChatPanel() {
-  const { messages, isStreaming, currentStage } = useChat()
+  const { messages, isStreaming, currentStage, streamCompletedStages } = useChat()
   const { currentProject, initialPrompt, setInitialPrompt } = useProject()
   const { sendPrompt } = useEditStream()
   const health = useBackendHealth()
@@ -135,11 +161,33 @@ export function ChatPanel() {
       {/* Messages */}
       <ScrollArea className="flex-1">
         <div ref={scrollRef} className="flex flex-col gap-1 p-3">
-          {messages.length === 0 && (
+          {messages.length === 0 && !isStreaming && (
             <div className="py-12 text-center">
-              <p className="text-xs text-r-text-dim">
-                describe what you want to create
-              </p>
+              {currentProject?.code ? (
+                <>
+                  <p className="text-xs text-r-text-muted">
+                    your model is ready
+                  </p>
+                  <p className="mt-2 text-2xs text-r-text-dim">
+                    try asking for refinements
+                  </p>
+                  <div className="mt-4 flex flex-col gap-1.5 mx-auto max-w-[200px]">
+                    {['make it taller', 'add rounded edges', 'add a hole in the center'].map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => setInput(s)}
+                        className="rounded-md border border-r-border px-2.5 py-1 text-2xs text-r-text-dim transition-all hover:border-r-text-dim hover:text-r-text-muted"
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="text-xs text-r-text-dim">
+                  describe what you want to create
+                </p>
+              )}
             </div>
           )}
           {messages.map((msg) => (
@@ -155,12 +203,9 @@ export function ChatPanel() {
                 {msg.role === 'user' ? 'you' : 'rendr'}
               </div>
               <p className="whitespace-pre-wrap">{msg.content}</p>
-              {msg.role === 'assistant' && msg.pipelineStages && (
-                <PipelineProgress completedStages={msg.pipelineStages} currentStage={null} />
-              )}
             </div>
           ))}
-          {isStreaming && <PipelineProgress completedStages={[]} currentStage={currentStage} />}
+          {isStreaming && <PipelineChain completedStages={streamCompletedStages} currentStage={currentStage} />}
         </div>
       </ScrollArea>
 
@@ -172,7 +217,7 @@ export function ChatPanel() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="describe your model..."
+              placeholder={currentProject?.code ? "refine your model..." : "describe your model..."}
               disabled={!currentProject || isStreaming}
               rows={1}
               className="max-h-28 min-h-[36px] flex-1 resize-none bg-transparent px-3 py-2.5 text-xs text-r-text placeholder:text-r-text-dim focus:outline-none disabled:opacity-40"

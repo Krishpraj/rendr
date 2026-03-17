@@ -1,231 +1,199 @@
 # rendr
 
-A desktop application that turns natural language into manufacturable 3D models. Describe what you want — "a threaded bolt with a hex head" — and rendr generates parametric OpenSCAD code, compiles it to a 3D mesh in your browser, analyzes it for print readiness, and lets you refine it conversationally until it's ready to manufacture.
+> type words → get a 3D model ready to print
 
-3D printing is becoming the backbone of rapid prototyping, medical devices, housing construction, and distributed manufacturing — but the design step remains a bottleneck. CAD tools have steep learning curves, and existing text-to-3D approaches produce visual meshes that look correct but can't actually be fabricated. rendr bridges that gap: anyone who can describe a part in words can get a printable model with real engineering constraints baked in.
+rendr is a little desktop app that turns plain English into manufacturable 3D models. describe what you want, watch it generate OpenSCAD code, compile to a mesh right in your browser, and refine it until it's ready to send to your printer.
 
-## What Makes rendr Different
+this is a personal project — rough edges and all.
 
-**Retrieval-augmented generation over real models.** Before the LLM writes a single line of code, rendr searches 7,378 real OpenSCAD models from Thingiverse using TF-IDF similarity. High-confidence matches return proven, working code instantly — zero LLM calls, zero hallucination. For novel requests, the top matches are passed as reference context so the LLM builds on patterns that are known to compile and print correctly. This hybrid approach means common parts (brackets, enclosures, gears) are near-instant and reliable, while novel geometry still gets the full generative pipeline.
+---
 
-**Self-correcting pipeline, not single-shot generation.** rendr runs a 7-stage LangGraph state machine that generates code, applies deterministic syntax fixes, compiles it against the real OpenSCAD engine, reviews it against manufacturing constraints, and loops back with structured feedback if it fails — automatically, up to a configurable number of rounds. Each stage is purpose-built: regex-based fixes handle the mechanical errors, compilation catches what regex misses, and agentic review validates the engineering quality. The pipeline streams progress to the UI in real-time via NDJSON so you see exactly where your model is in the process.
+## what it does
 
-**Agentic review with real tool use.** The review stage isn't just an LLM reading code — it's a [Railtracks](https://github.com/railtracks/railtracks) agent that calls tool nodes to programmatically validate parameterization, check CSG operations, verify curve resolution, detect z-fighting, and audit module structure. Tool-based validation catches systematic issues that LLM-only review is unreliable at — like verifying every dimension is parameterized at the top of the file, or confirming that boolean operations use the correct manifold patterns.
+```
+"a threaded bolt with a hex head"
+        ↓
+  OpenSCAD code
+        ↓
+  3D mesh in browser
+        ↓
+  print analysis + STL download
+```
 
-**Client-side 3D compilation.** OpenSCAD runs as WASM in a Web Worker — the browser compiles `.scad` to STL directly with no server round-trip. This means instant feedback: edit a parameter slider and see the model recompile in seconds without touching the network. The server handles intelligence (code generation, review); the client handles geometry (compilation, rendering, analysis).
+**generation pipeline** — 7-stage LangGraph state machine. starts with a TF-IDF similarity search over ~7k OpenSCAD models; direct matches skip the LLM entirely. otherwise it plans → generates → fixes syntax → validates → reviews → refines.
 
-**Print-aware from generation to export.** rendr doesn't just show you a 3D model — it tells you if you can actually manufacture it. Real-time mesh analysis computes watertightness, wall thickness ratios, topological genus, and runs a 5-point print readiness checklist. Cost and time estimates across 6 materials (PLA, ABS, PETG, Resin, Nylon, TPU) let you make manufacturing decisions before opening a slicer. A layer-by-layer print simulation lets you visualize the actual build process. This closes the loop between design and fabrication — the person describing the part gets immediate feedback on whether it's producible, without needing manufacturing expertise.
+**3D viewer** — orbit controls, wireframe/solid modes, 9 color presets, adjustable material properties, STL download.
 
-**Parametric from the start.** Generated models aren't static geometry — dimensions are extracted as named parameters with interactive sliders. Adjust height, radius, wall thickness in real-time and watch the model recompile. This means a single generated design becomes a family of parts: one prompt produces a bolt, and the parameter controls let you resize it for M3 through M12 without another LLM call. For education, this makes the relationship between code and geometry tangible — students can see how changing `thread_pitch` reshapes the helix in real-time.
+**mesh analysis** — watertight check, genus, Euler characteristic, surface area, volume, center of mass, and a 5-point print readiness checklist with weight/time/cost estimates for 6 materials.
 
-## Features
+**parametric controls** — auto-detected sliders and toggles for any parameter in the code. tweak values and the model recompiles live.
 
-### Code Generation Pipeline
+**print simulation** — layer-by-layer build animation with playback controls.
 
-The backend runs a LangGraph state machine with 7 stages:
+**code editor** — CodeMirror 6 with syntax highlighting. edit the code directly and the viewer updates.
 
-1. **Retrieve** — TF-IDF similarity search over 7,378 OpenSCAD models. Direct matches (score >= 0.35) return dataset code with zero LLM calls. Lower scores pass the top 3 results as reference context.
+---
 
-2. **Analyze & Plan** — Breaks down the prompt into a structured plan: modules to create, parameters to extract, CSG tree structure.
+## stack
 
-3. **Generate** — Produces OpenSCAD code from the plan, reference models, and any review feedback from previous rounds.
-
-4. **Syntax Fix** — Deterministic regex pass that catches common OpenSCAD mistakes: geometry assigned to variables, bare variable usage, `let()` wrapping geometry, missing semicolons.
-
-5. **Validate** — Compiles against OpenSCAD to verify syntax and checks parameter parseability.
-
-6. **Review** — Railtracks agent with tool nodes runs an 11-point checklist covering parameterization, CSG operations, curve resolution, z-fighting prevention, and module structure. Returns "APPROVED" or structured feedback for the next generate round.
-
-7. **Finalize** — Accepts code after max refinement rounds if the review loop hasn't converged.
-
-### 3D Viewer
-
-- Solid and wireframe view modes
-- Perspective and orthographic cameras
-- Orbit controls with gizmo viewcube
-- Adjustable material properties: brightness, roughness, metalness, flat shading
-- 9 color presets (silver, gold, copper, steel, etc.)
-- Direct STL download
-
-### Mesh Analysis
-
-- **Geometry**: vertex, triangle, and edge counts
-- **Dimensions**: bounding box (W x H x D) and center of mass
-- **Physical properties**: surface area and volume
-- **Topology**: watertight detection, genus (topological holes), Euler characteristic
-- **Print readiness**: 5-point checklist — manifold mesh, valid geometry, positive volume, wall thickness ratio, simple topology
-- **Print estimates**: weight, time, and cost for 6 materials (PLA, ABS, PETG, Resin, Nylon, TPU)
-
-### Parametric Controls
-
-- Sliders for numeric values with auto-detected min/max/step ranges
-- Toggles for booleans, grouped parameters via `/* [GroupName] */` markers
-- Real-time recompilation (600ms debounce)
-- Reset to defaults
-
-### Print Simulation
-
-- Layer-by-layer build visualization with clipping plane
-- Animated nozzle indicator at current layer height
-- Playback controls with adjustable speed (0.25x to 5x)
-- Layer count, height progress, and build percentage
-
-### Code Editor
-
-CodeMirror 6 with syntax highlighting, bracket matching, code folding, search/replace, and undo/redo. Changes propagate to the 3D viewer with 800ms debounce.
-
-## Tech Stack
-
-| Layer | Technology |
+| | |
 |---|---|
-| Desktop shell | Electron 33 |
-| Frontend | React 18, TypeScript, Tailwind CSS |
-| 3D rendering | Three.js via React Three Fiber |
-| Code editor | CodeMirror 6 |
-| 3D compilation | OpenSCAD WASM (client-side, Web Worker) |
-| Backend | FastAPI, Python 3.11+ |
-| Database | SQLite via aiosqlite (WAL mode, async) |
-| Pipeline orchestration | LangGraph |
-| Review agent | Railtracks |
-| LLM | Claude Sonnet 4 (primary), Claude Haiku 4.5 (fast steps) |
-| Model retrieval | TF-IDF + cosine similarity over 7,378 Thingiverse models |
+| desktop shell | Electron 33 |
+| frontend | React 18 · TypeScript · Tailwind CSS |
+| 3D | Three.js via React Three Fiber |
+| editor | CodeMirror 6 |
+| 3D compilation | OpenSCAD WASM (Web Worker, no install needed) |
+| backend | FastAPI · Python 3.11+ |
+| db | SQLite via aiosqlite |
+| pipeline | LangGraph |
+| review agent | Railtracks |
+| LLMs | Claude Sonnet 4 (generation) · Claude Haiku 4.5 (fast steps) |
+| retrieval | TF-IDF + cosine similarity · 7,378 Thingiverse models |
 
-## Prerequisites
+---
+
+## getting started
+
+### you'll need
 
 - **Node.js** >= 18
 - **Python** >= 3.11
-- **An LLM API key** — Anthropic (recommended), OpenAI, or a local Ollama instance
-- **OpenSCAD** (optional) — only needed for server-side PNG export. The 3D viewer uses WASM and works without it
+- **An API key** — Anthropic (recommended), OpenAI, or a local Ollama instance
+- **OpenSCAD** *(optional)* — only for server-side PNG export. the 3D viewer works without it via WASM
 
-## Setup
-
-### 1. Clone
+### 1 · clone
 
 ```bash
 git clone https://github.com/Krishpraj/rendr.git
 cd rendr
 ```
 
-### 2. Backend
+### 2 · backend
 
 ```bash
 cd rendr-api
-
-# Create a virtual environment (recommended)
 python -m venv .venv
-# Windows
+
+# windows
 .venv\Scripts\activate
-# macOS/Linux
+# mac / linux
 source .venv/bin/activate
 
-# Install
 pip install -e .
 ```
 
-Create `rendr-api/.env`:
+create `rendr-api/.env` and drop in your key:
 
 ```env
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-That's the minimum. See [Configuration](#configuration) for all options.
-
-### 3. Frontend
+### 3 · frontend
 
 ```bash
 cd rendr-app
 npm install
 ```
 
-### 4. Run
+### 4 · run
 
-**Option A — Dev script (Windows PowerShell):**
-
+**windows (powershell):**
 ```powershell
 .\start-dev.ps1
 ```
 
-Opens two terminals: API server + Electron app.
-
-**Option B — Manual (two terminals):**
-
+**everyone else (two terminals):**
 ```bash
-# Terminal 1: backend
-cd rendr-api
-uvicorn rendr_api.main:app --reload
+# terminal 1
+cd rendr-api && uvicorn rendr_api.main:app --reload
 
-# Terminal 2: frontend
-cd rendr-app
-npm run dev
+# terminal 2
+cd rendr-app && npm run dev
 ```
 
-The API starts on `http://localhost:8000`. The Electron app connects automatically.
+API runs at `http://localhost:8000`. Electron connects automatically.
 
-## Configuration
+---
 
-All settings go in `rendr-api/.env`:
+## configuration
 
-| Variable | Default | Description |
+all options go in `rendr-api/.env`
+
+| variable | default | what it does |
 |---|---|---|
-| `LLM_PROVIDER` | `anthropic` | `anthropic`, `openai`, or `ollama` |
-| `LLM_MODEL` | `claude-sonnet-4-20250514` | Primary model for generation |
-| `FAST_PROVIDER` | `anthropic` | Provider for validation/review steps |
-| `FAST_MODEL` | `claude-haiku-4-5-20251001` | Fast model for lightweight steps |
-| `ANTHROPIC_API_KEY` | — | Required for Anthropic provider |
-| `OPENAI_API_KEY` | — | Required for OpenAI provider |
-| `OPENAI_API_BASE` | — | Custom OpenAI-compatible endpoint |
+| `LLM_PROVIDER` | `anthropic` | `anthropic` · `openai` · `ollama` |
+| `LLM_MODEL` | `claude-sonnet-4-20250514` | primary generation model |
+| `FAST_PROVIDER` | `anthropic` | provider for lightweight steps |
+| `FAST_MODEL` | `claude-haiku-4-5-20251001` | fast model for validation/review |
+| `ANTHROPIC_API_KEY` | — | required for Anthropic |
+| `OPENAI_API_KEY` | — | required for OpenAI |
+| `OPENAI_API_BASE` | — | custom OpenAI-compatible endpoint |
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama server URL |
-| `OPENSCAD_PATH` | `openscad` | Path to OpenSCAD binary (for PNG export) |
+| `OPENSCAD_PATH` | `openscad` | path to binary (PNG export only) |
 | `TEMPERATURE` | `0.0` | LLM temperature |
-| `MAX_REFINEMENT_ROUNDS` | `2` | Max generate→review loop iterations |
+| `MAX_REFINEMENT_ROUNDS` | `2` | max generate→review iterations |
 | `HOST` | `0.0.0.0` | API bind host |
 | `PORT` | `8000` | API bind port |
 
-## Project Structure
+---
+
+## project structure
 
 ```
 rendr/
 ├── rendr-api/                  # FastAPI backend
 │   ├── rendr_api/
-│   │   ├── main.py             # App entry, CORS, router mounting
-│   │   ├── config.py           # Pydantic settings from .env
-│   │   ├── routers/            # /health, /edit, /render, /projects endpoints
-│   │   ├── services/
-│   │   │   ├── pipeline.py     # LangGraph state machine (7 stages)
-│   │   │   ├── review_agent.py # Railtracks agent with tool nodes
-│   │   │   ├── openscad.py     # OpenSCAD CLI wrapper
-│   │   │   ├── retrieval.py    # TF-IDF model search over dataset
-│   │   │   ├── parameters.py   # OpenSCAD parameter extraction
-│   │   │   └── database.py     # SQLite persistence (projects, chat history)
-│   │   └── models/             # Pydantic request/response schemas
-│   ├── train-00000-of-00001.parquet  # 7,378 OpenSCAD models
-│   └── pyproject.toml
-├── rendr-app/                  # Electron + React frontend
-│   ├── src/
-│   │   ├── main/index.ts       # Electron main process
-│   │   ├── preload/            # IPC bridge
-│   │   └── renderer/src/
-│   │       ├── components/
-│   │       │   ├── chat/       # Chat panel with pipeline progress
-│   │       │   ├── preview/    # 3D viewer, code editor, STL renderer
-│   │       │   ├── workspace/  # Analysis, parameters, print sim panels
-│   │       │   └── welcome/    # Home screen with project cards
-│   │       ├── contexts/       # Project, Chat, MeshAnalytics state
-│   │       ├── hooks/          # useEditStream, useRender, useBackendHealth
-│   │       ├── lib/            # API client, mesh analytics, WASM bridge
-│   │       └── workers/        # OpenSCAD WASM Web Worker
-│   └── package.json
-└── start-dev.ps1               # Dev startup script (Windows)
+│   │   ├── main.py             # entry point, CORS, router mounting
+│   │   ├── config.py           # pydantic settings from .env
+│   │   ├── routers/            # /health /edit /render /projects
+│   │   └── services/
+│   │       ├── pipeline.py     # LangGraph 7-stage state machine
+│   │       ├── review_agent.py # Railtracks agent + tool nodes
+│   │       ├── retrieval.py    # TF-IDF search over dataset
+│   │       ├── parameters.py   # OpenSCAD parameter extraction
+│   │       └── database.py     # SQLite (projects, chat history)
+│   └── train-00000-of-00001.parquet   # 7,378 OpenSCAD models
+│
+└── rendr-app/                  # Electron + React frontend
+    └── src/renderer/src/
+        ├── components/
+        │   ├── chat/           # chat panel + pipeline progress
+        │   ├── preview/        # 3D viewer, code editor, STL renderer
+        │   ├── workspace/      # analysis, parameters, print sim
+        │   └── welcome/        # home screen + project cards
+        ├── contexts/           # Project, Chat, MeshAnalytics state
+        ├── hooks/              # useEditStream, useRender, useBackendHealth
+        ├── lib/                # API client, mesh analytics, WASM bridge
+        └── workers/            # OpenSCAD WASM Web Worker
 ```
 
-## Troubleshooting
+---
 
-**"Offline" in status bar** — Backend isn't running. Start it with `uvicorn rendr_api.main:app --reload` from `rendr-api/`.
+## troubleshooting
 
-**3D preview stuck on "Building 3D model..."** — The WASM compiler hit an error. Open DevTools (Ctrl+Shift+I) and check console for OpenSCAD output. Usually a syntax error in the generated code.
+**status bar says "Offline"**
+backend isn't running — `cd rendr-api && uvicorn rendr_api.main:app --reload`
 
-**Export PNG fails** — Server-side rendering requires the OpenSCAD binary. Install from [openscad.org](https://openscad.org/downloads.html) and ensure it's in your PATH or set `OPENSCAD_PATH`.
+**stuck on "Building 3D model..."**
+WASM hit an error. open DevTools (`Ctrl+Shift+I`) and check the console for OpenSCAD output. usually a syntax error in generated code.
 
-**Pipeline keeps looping** — The review agent is rejecting the code. Check the chat for feedback. You can reduce `MAX_REFINEMENT_ROUNDS` in `.env` or use "fast" mode in the chat which skips validation and review.
+**PNG export fails**
+needs the OpenSCAD binary installed and in PATH (or set `OPENSCAD_PATH`). download at [openscad.org](https://openscad.org/downloads.html).
 
-**Model looks wrong but code compiles** — Switch to the Analysis tab and check the print readiness checklist. Non-watertight meshes or high genus values usually indicate geometry issues in the OpenSCAD code.
+**pipeline keeps looping**
+the review agent is rejecting the code. lower `MAX_REFINEMENT_ROUNDS` in `.env`, or use "fast" mode in the chat which skips validation and review.
+
+**model looks wrong but compiles**
+check the Analysis tab → print readiness. non-watertight meshes or high genus values usually point to geometry issues.
+
+---
+
+## credits
+
+[CADAM](https://github.com/Adam-CAD/CADAM) — parametric CAD modeling environment that informed rendr's approach to code-driven 3D design 
+
+[openscad-playground](https://github.com/openscad/openscad-playground) — browser-based OpenSCAD editor that proved client-side compilation was viable and shaped the in-browser rendering architecture
+
+[openscad-wasm](https://github.com/openscad/openscad-wasm) — OpenSCAD compiled to WebAssembly, the engine that powers rendr's 3D compilation without requiring a local OpenSCAD install
+
+---

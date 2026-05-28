@@ -4,8 +4,7 @@
 
 rendr is a little desktop app that turns plain English into manufacturable 3D models. describe what you want, watch it generate OpenSCAD code, compile to a mesh right in your browser, and refine it until it's ready to send to your printer.
 
-this is a personal project — rough edges and all.
-
+[![Watch video](https://img.youtube.com/vi/jOr6v3mcYcU/0.jpg)](https://www.youtube.com/watch?v=jOr6v3mcYcU)
 ---
 
 ## what it does
